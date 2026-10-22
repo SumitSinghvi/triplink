@@ -43,6 +43,23 @@ export const DEFAULT_CURRENT_USER: UserProfile = {
   createdAt: '2026-10-01',
 };
 
+export const DEFAULT_CURRENT_TRIP: Trip = {
+  id: 'trip_kabir_active',
+  userId: DEFAULT_CURRENT_USER.id,
+  trainNumber: '12951',
+  trainName: 'Tejas Rajdhani Express',
+  travelDate: getDefaultTravelDate(),
+  fromCode: 'NDLS',
+  fromName: 'New Delhi',
+  toCode: 'MMCT',
+  toName: 'Mumbai Central',
+  travelClass: '3A',
+  coach: 'B4',
+  berthType: 'Side Lower',
+  pnrHash: '******4819',
+  privacyShareCoach: true,
+};
+
 // Safe localStorage access
 function safeGet<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -86,31 +103,16 @@ export const StorageStore = {
 
   // All known users (co-travelers + current user)
   getAllUsers(): UserProfile[] {
-    return safeGet<UserProfile[]>(STORAGE_KEYS.ALL_USERS, [
-      DEFAULT_CURRENT_USER,
-      ...INITIAL_USERS,
-    ]);
+    const stored = safeGet<UserProfile[]>(STORAGE_KEYS.ALL_USERS, []);
+    const merged = new Map<string, UserProfile>();
+    [DEFAULT_CURRENT_USER, ...INITIAL_USERS].forEach((u) => merged.set(u.id, u));
+    stored.forEach((u) => merged.set(u.id, u));
+    return Array.from(merged.values());
   },
 
   // Current active trip
   getCurrentTrip(): Trip {
-    const defaultTrip: Trip = {
-      id: 'trip_kabir_active',
-      userId: DEFAULT_CURRENT_USER.id,
-      trainNumber: '12951',
-      trainName: 'Tejas Rajdhani Express',
-      travelDate: getDefaultTravelDate(),
-      fromCode: 'NDLS',
-      fromName: 'New Delhi',
-      toCode: 'MMCT',
-      toName: 'Mumbai Central',
-      travelClass: '3A',
-      coach: 'B4',
-      berthType: 'Side Lower',
-      pnrHash: '******4819',
-      privacyShareCoach: true,
-    };
-    return safeGet<Trip>(STORAGE_KEYS.CURRENT_TRIP, defaultTrip);
+    return safeGet<Trip>(STORAGE_KEYS.CURRENT_TRIP, DEFAULT_CURRENT_TRIP);
   },
 
   setCurrentTrip(trip: Trip): void {
@@ -127,9 +129,12 @@ export const StorageStore = {
 
   // All trips across all users
   getAllTrips(): Trip[] {
+    const stored = safeGet<Trip[]>(STORAGE_KEYS.ALL_TRIPS, []);
+    const merged = new Map<string, Trip>();
     const currentTrip = this.getCurrentTrip();
-    const initial = [currentTrip, ...getInitialTrips()];
-    return safeGet<Trip[]>(STORAGE_KEYS.ALL_TRIPS, initial);
+    [currentTrip, ...getInitialTrips()].forEach((t) => merged.set(t.id, t));
+    stored.forEach((t) => merged.set(t.id, t));
+    return Array.from(merged.values());
   },
 
   // Find co-travelers on same train and date

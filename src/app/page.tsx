@@ -5,7 +5,6 @@ import {
   Users,
   MessageSquare,
   ShieldCheck,
-  Train,
 } from 'lucide-react';
 import {
   UserProfile,
@@ -14,7 +13,12 @@ import {
   ConnectRequest,
   DirectMessage,
 } from '@/types';
-import { StorageStore, DEFAULT_CURRENT_USER } from '@/lib/store';
+import {
+  StorageStore,
+  DEFAULT_CURRENT_USER,
+  DEFAULT_CURRENT_TRIP,
+} from '@/lib/store';
+import { INITIAL_USERS } from '@/lib/mockData';
 import { Navbar } from '@/components/Navbar';
 import { TripHero } from '@/components/TripHero';
 import { CoTravelersList } from '@/components/CoTravelersList';
@@ -26,15 +30,35 @@ import { ProfileModal } from '@/components/ProfileModal';
 import { SafetyGuidelinesModal } from '@/components/SafetyGuidelinesModal';
 
 export default function Home() {
-  const [isClient, setIsClient] = useState(false);
-
-  // Core App State
+  // Core App State initialized immediately with solid defaults
   const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_CURRENT_USER);
-  const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [coTravelers, setCoTravelers] = useState<{ user: UserProfile; trip: Trip }[]>([]);
-  const [corridorTravelers, setCorridorTravelers] = useState<{ user: UserProfile; trip: Trip }[]>([]);
-  const [loungeMessages, setLoungeMessages] = useState<LoungeMessage[]>([]);
+  const [currentTrip, setCurrentTrip] = useState<Trip>(DEFAULT_CURRENT_TRIP);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([
+    DEFAULT_CURRENT_USER,
+    ...INITIAL_USERS,
+  ]);
+  const [coTravelers, setCoTravelers] = useState<{ user: UserProfile; trip: Trip }[]>(() =>
+    StorageStore.getCoTravelers(
+      DEFAULT_CURRENT_TRIP.trainNumber,
+      DEFAULT_CURRENT_TRIP.travelDate,
+      DEFAULT_CURRENT_USER.id
+    )
+  );
+  const [corridorTravelers, setCorridorTravelers] = useState<{ user: UserProfile; trip: Trip }[]>(() =>
+    StorageStore.getCorridorTravelers(
+      DEFAULT_CURRENT_TRIP.fromCode,
+      DEFAULT_CURRENT_TRIP.toCode,
+      DEFAULT_CURRENT_TRIP.travelDate,
+      DEFAULT_CURRENT_TRIP.trainNumber,
+      DEFAULT_CURRENT_USER.id
+    )
+  );
+  const [loungeMessages, setLoungeMessages] = useState<LoungeMessage[]>(() =>
+    StorageStore.getLoungeMessages(
+      DEFAULT_CURRENT_TRIP.trainNumber,
+      DEFAULT_CURRENT_TRIP.travelDate
+    )
+  );
   const [connectRequests, setConnectRequests] = useState<ConnectRequest[]>([]);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
 
@@ -53,48 +77,51 @@ export default function Home() {
   const [connectTargetTrip, setConnectTargetTrip] = useState<Trip | null>(null);
   const [activeChatRequestId, setActiveChatRequestId] = useState<string | null>(null);
 
-  // Reload state from Store
+  // Reload state from Store (syncs with localStorage)
   const refreshState = useCallback(() => {
-    const user = StorageStore.getCurrentUser();
-    const trip = StorageStore.getCurrentTrip();
-    const users = StorageStore.getAllUsers();
-    setCurrentUser(user);
-    setCurrentTrip(trip);
-    setAllUsers(users);
+    try {
+      const user = StorageStore.getCurrentUser();
+      const trip = StorageStore.getCurrentTrip();
+      const users = StorageStore.getAllUsers();
+      setCurrentUser(user);
+      setCurrentTrip(trip);
+      setAllUsers(users);
 
-    if (trip) {
-      const travelers = StorageStore.getCoTravelers(
-        trip.trainNumber,
-        trip.travelDate,
-        user.id
-      );
-      setCoTravelers(travelers);
+      if (trip) {
+        const travelers = StorageStore.getCoTravelers(
+          trip.trainNumber,
+          trip.travelDate,
+          user.id
+        );
+        setCoTravelers(travelers);
 
-      const corridors = StorageStore.getCorridorTravelers(
-        trip.fromCode,
-        trip.toCode,
-        trip.travelDate,
-        trip.trainNumber,
-        user.id
-      );
-      setCorridorTravelers(corridors);
+        const corridors = StorageStore.getCorridorTravelers(
+          trip.fromCode,
+          trip.toCode,
+          trip.travelDate,
+          trip.trainNumber,
+          user.id
+        );
+        setCorridorTravelers(corridors);
 
-      const msgs = StorageStore.getLoungeMessages(trip.trainNumber, trip.travelDate);
-      setLoungeMessages(msgs);
-    }
+        const msgs = StorageStore.getLoungeMessages(trip.trainNumber, trip.travelDate);
+        setLoungeMessages(msgs);
+      }
 
-    const requests = StorageStore.getConnectRequests(user.id);
-    setConnectRequests(requests);
+      const requests = StorageStore.getConnectRequests(user.id);
+      setConnectRequests(requests);
 
-    if (activeChatRequestId) {
-      const dms = StorageStore.getDirectMessages(activeChatRequestId);
-      setDirectMessages(dms);
+      if (activeChatRequestId) {
+        const dms = StorageStore.getDirectMessages(activeChatRequestId);
+        setDirectMessages(dms);
+      }
+    } catch (e) {
+      console.error('Error refreshing state from storage', e);
     }
   }, [activeChatRequestId]);
 
-  // Initial client hydration
+  // Client hydration and sync
   useEffect(() => {
-    setIsClient(true);
     refreshState();
 
     const handleStorageChange = () => {
@@ -201,18 +228,7 @@ export default function Home() {
     }
   };
 
-  if (!isClient || !currentTrip) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <Train className="w-6 h-6 text-blue-500 animate-spin" />
-          <span className="text-sm font-medium text-slate-300">Loading RailMeet...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // Calculate Metrics
+  // Calculate Metrics safely
   const sameCoachCount = coTravelers.filter(
     (item) => currentTrip.coach && item.trip.coach === currentTrip.coach
   ).length;
@@ -251,7 +267,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveView('passengers')}
-              className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition flex items-center gap-2 ${
+              className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer ${
                 activeView === 'passengers'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
                   : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
@@ -263,7 +279,7 @@ export default function Home() {
 
             <button
               onClick={() => setActiveView('lounge')}
-              className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition flex items-center gap-2 ${
+              className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer ${
                 activeView === 'lounge'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
                   : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
@@ -277,7 +293,7 @@ export default function Home() {
 
           <button
             onClick={() => setSafetyModalOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-400 transition"
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-400 transition cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>Passenger Safety & 139 Guide</span>

@@ -43,12 +43,21 @@ export const TripHero: React.FC<TripHeroProps> = ({
     }
   };
 
-  const formattedDate = new Date(trip.travelDate).toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const formattedDate = React.useMemo(() => {
+    try {
+      const parts = trip.travelDate.split('-');
+      if (parts.length === 3) {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const day = parts[2];
+        const monthIndex = parseInt(parts[1], 10) - 1;
+        const year = parts[0];
+        return `${day} ${months[monthIndex] || parts[1]} ${year}`;
+      }
+      return trip.travelDate;
+    } catch {
+      return trip.travelDate;
+    }
+  }, [trip.travelDate]);
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-blue-900/40 p-6 sm:p-8 shadow-xl text-white">
