@@ -714,13 +714,13 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
         position: relative; height: 100%; overflow: hidden; border-radius: 44px;
         background: var(--fill-primary-on); display: flex; flex-direction: column;
         box-shadow: 0 0 0 1px var(--stroke-secondary);
+        padding-top: 14px;
       }
       @media (max-width: 600px) {
         .x-stage { padding: 0; display: block; min-height: 0; }
         .x-caption { display: none; }
         .x-phone { position: fixed; inset: 0; width: auto; height: auto; min-height: 0; border-radius: 0; padding: 0; box-shadow: none; background: var(--fill-primary-on); }
-        .x-app { border-radius: 0; box-shadow: none; padding-bottom: env(safe-area-inset-bottom, 0px); }
-        .x-status { padding-top: env(safe-area-inset-top, 0px); }
+        .x-app { border-radius: 0; box-shadow: none; padding-top: env(safe-area-inset-top, 8px); padding-bottom: env(safe-area-inset-bottom, 0px); }
       }
 
       /* status bar and prototype tag */
@@ -741,7 +741,7 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
       .x-icon-btn { flex: none; width: var(--tap); height: var(--tap); display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--text-primary); cursor: pointer; }
       .x-icon-btn:hover { background: var(--hover-wash); }
       .x-icon-btn--fill { background: var(--fill-tertiary); }
-      .x-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 28px; display: grid; gap: 14px; align-content: start; scrollbar-width: none; }
+      .x-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 28px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
       .x-body::-webkit-scrollbar { display: none; }
       .x-foot { flex: none; padding: 10px 16px 14px; display: grid; gap: 8px; border-top: 1px solid var(--stroke-secondary); background: var(--fill-primary-on); }
       .x-sub { font: var(--type-small); color: var(--text-secondary); }
@@ -784,12 +784,18 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
       .x-card { display: grid; gap: 10px; padding: 16px; border-radius: var(--r-l); background: var(--fill-tertiary); color: var(--text-primary); border: 0; text-align: left; font: var(--type-body); width: 100%; }
       button.x-card, .x-card[role="button"] { cursor: pointer; transition: transform var(--dur-quick) var(--ease-out); }
       button.x-card:active, .x-card[role="button"]:active { transform: scale(0.99); }
-      .x-card--dark { background: var(--fill-primary); color: var(--text-primary-on); }
-      .x-card--dark .x-sub { color: var(--text-secondary-on); }
-      .x-card--dark .x-btn { background: var(--fill-primary-on); color: var(--text-primary); }
-      .x-list { border-radius: var(--r-l); background: var(--fill-tertiary); overflow: hidden; }
-      .x-li { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 10px 16px; border: 0; border-bottom: 1px solid var(--stroke-secondary); background: transparent; color: var(--text-primary); font: var(--type-body); text-align: left; }
-      .x-li:last-child { border-bottom: 0; }
+      .x-card--dark {
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: var(--text-primary);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      }
+      .x-card--dark .x-sub { color: var(--text-secondary); }
+      .x-card--dark .x-btn { background: var(--fill-primary); color: var(--text-primary-on); }
+      .x-list { border-radius: var(--r-l); background: var(--fill-tertiary); display: flex; flex-direction: column; min-height: fit-content; }
+      .x-li { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--stroke-secondary); background: transparent; color: var(--text-primary); font: var(--type-body); text-align: left; }
+      .x-li:first-child { border-top-left-radius: var(--r-l); border-top-right-radius: var(--r-l); }
+      .x-li:last-child { border-bottom-left-radius: var(--r-l); border-bottom-right-radius: var(--r-l); border-bottom: 0; }
       button.x-li { cursor: pointer; }
       button.x-li:hover { background: var(--hover-wash); }
       .x-li__main { flex: 1; min-width: 0; display: grid; gap: 2px; }
@@ -798,7 +804,7 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
       .x-chev { color: var(--text-secondary); }
       .x-ver { display: inline-flex; align-items: center; gap: 5px; font: var(--type-tag); color: var(--text-primary); white-space: nowrap; }
       .x-ver svg { color: var(--fill-system-green); }
-      .x-card--dark .x-ver { color: var(--text-primary-on); }
+      .x-card--dark .x-ver { color: var(--text-primary); }
       .x-note { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--r-m); box-shadow: inset 0 0 0 1px var(--stroke-primary); font: var(--type-small); color: var(--text-secondary); }
       .x-note svg { flex: none; color: var(--text-primary); margin-top: 1px; }
 
@@ -914,16 +920,16 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
           <div id="toast" role="status"></div>
         </div>
         <aside class="x-caption" aria-label="About this prototype">
-          <span class="x-proto">Prototype — sample data</span>
-          <h1>TripLink clickable prototype</h1>
-          <p>Tap through: sign up → add trip → match → chat.</p>
+          <span class="x-proto">Live App</span>
+          <h1>TripLink Web App</h1>
+          <p>Flow: phone OTP → setup profile → add trip by PNR → match & chat.</p>
           <ol>
-            <li>Sign up with any OTP</li>
-            <li>Add a trip by PNR or flight</li>
-            <li>Connect with Rakesh; he accepts in 2 s</li>
-            <li>Chat in the Chats tab</li>
+            <li>Sign in with mobile number & 4-digit OTP</li>
+            <li>Setup your Business or Social profile</li>
+            <li>Add your trip with a 10-digit PNR</li>
+            <li>Connect and chat with verified co-travelers</li>
           </ol>
-          <p>Pilot corridor: Ahmedabad–Mumbai. Nothing is saved; reload to start over.</p>
+          <p>Live IRCTC verification enabled. Privacy-first: seat & coach numbers stay private.</p>
         </aside>
       </main>
     </div>
@@ -1103,58 +1109,31 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
   const FILTERS = ["All", "Business", "Social", "Same industry"];
   const REASONS = ["Spam", "Harassment", "Fake profile", "Other"];
   const QUICK = ["Share catalogue", "Meet at station?", "Let's connect after the trip"];
-  const REPLIES = [
-    "Great, can you share your catalogue? Let's talk at Mumbai Central.",
-    "Sounds good. I'll be near the exit after we arrive.",
-    "Perfect, let's stay in touch after the trip.",
-  ];
-  const MATCHES = [
-    { id: "rakesh", name: "Rakesh Shah", ini: "RS", company: "Shah Fabrics, Surat", industry: "Textiles", line: "Looking to buy cotton cambric", verified: true, fit: 92, type: "Business", he: "He",
-      about: "Fabric trader based in Surat, sourcing for garment units in Gujarat and Maharashtra.",
-      looking: "Cotton cambric suppliers for regular orders.",
-      why: ["Same train", "Textiles", "He buys what you sell"], all: true },
-    { id: "priya", name: "Priya Mehta", ini: "PM", company: "Mehta Packaging", industry: "Packaging", line: "Selling corrugated boxes", verified: true, fit: 78, type: "Business",
-      about: "Makes corrugated boxes for manufacturers and traders.",
-      looking: "Buyers of corrugated boxes.",
-      why: ["Same train", "Packaging for your shipments", "She sells what you could buy"] },
-    { id: "imran", name: "Imran Qureshi", ini: "IQ", company: "Mumbai garment exporter", industry: "Garments", line: "Buying printed fabrics", verified: false, fit: 88, type: "Business",
-      about: "Garment exporter based in Mumbai.",
-      looking: "Suppliers of printed fabrics.",
-      why: ["Same train", "Garments, next to Textiles", "He buys what you sell"] },
-    { id: "neha", name: "Neha J.", ini: "NJ", company: "Social", tags: ["Startups", "Food"], langs: "Hindi, Gujarati", type: "Social",
-      about: "Travelling for the day; up for a chat on the way.",
-      looking: "Travel company. Interested in startups and food.",
-      why: ["Same train", "Startups, Food", "Speaks Hindi and Gujarati"] },
-    { id: "arjun", name: "Arjun K.", ini: "AK", company: "Social", tags: ["Cricket"], line: "Share a cab from Mumbai Central", type: "Social",
-      about: "Cricket fan heading into the city.",
-      looking: "Someone to share a cab from Mumbai Central.",
-      why: ["Same train", "Same destination", "Wants to share a cab"] },
-    { id: "sunil", name: "Sunil Patel", ini: "SP", company: "Patel Chem Traders", industry: "Chemicals", line: "Looking to partner", look: "Partner", verified: false, fit: 64, type: "Business",
-      about: "Trades chemicals across Gujarat.",
-      looking: "Partners in related industries.",
-      why: ["Same train", "Chemicals", "Open to partnering"], all: true },
-  ];
-  const BYID = Object.fromEntries(MATCHES.map((m) => [m.id, m]));
-  const FOUND = { train: { kind: "train", name: "Shatabdi 12010", route: "Ahmedabad → Mumbai Central", when: "Wed 14 Oct, 14:40" } };
+  const REPLIES = [];
+  const MATCHES = [];
+  const BYID = {};
+  const FOUND = {};
 
   /* ---------- state (memory only) ---------- */
   let S, uid = 1, lastKey = "", toastTimer;
   function fresh() {
+    const isProf = typeof window !== "undefined" && (window.location.hash === "#profile" || window.location.search.includes("profile"));
     return {
-      screen: "welcome", tab: "trips", sub: null,
-      phone: "98765 •••••", otp: ["", "", "", ""],
+      screen: isProf ? "main" : "welcome", tab: isProf ? "profile" : "trips", sub: null,
+      phone: "", otp: ["", "", "", ""],
       modes: { business: true, social: false },
-      p: { name: "Jeenav P.", company: "Aagam Prints", industry: "Textiles", look: ["Sell"], cities: ["Ahmedabad", "Mumbai"], gstin: "24AAGCA1234F1Z5", verified: false, gstErr: "", first: "Jeenav", interests: ["Startups", "Food"], langs: ["Gujarati", "English"] },
+      p: { name: "", company: "", industry: "Textiles", look: ["Sell"], cities: ["Ahmedabad", "Mumbai"], gstin: "", verified: false, gstErr: "", first: "", interests: [], langs: [] },
       editing: false,
-      trips: [{ id: "t1", kind: "train", name: "Vande Bharat 20901", route: "Ahmedabad → Mumbai Central", when: "Mon 12 Oct, 06:10", count: 8, vis: { business: true, social: false, women: false, twoh: false } }],
-      selTrip: "t1", filter: "All",
+      trips: [],
+      matches: [],
+      selTrip: null, filter: "All",
       req: {}, gone: {}, chats: {}, order: [], unread: {}, active: null, typing: null, draft: "",
       add: null, sheet: null, menu: false,
       pro: false,
     };
   }
   function newAdd() {
-    return { step: 1, kind: "train", pnr: "4521873690", flight: "6E 6051", date: "2026-10-14", found: null, loading: false, err: "", vis: { business: true, social: S.modes.social, women: false, twoh: false } };
+    return { step: 1, kind: "train", pnr: "", flight: "", date: new Date().toISOString().split("T")[0], found: null, loading: false, err: "", vis: { business: true, social: S.modes.social, women: false, twoh: false } };
   }
 
   /* ---------- helpers ---------- */
@@ -1195,13 +1174,13 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     `<label class="x-li"><span class="x-li__main">${label}${sub ? `<small>${sub}</small>` : ""}</span><input type="checkbox" role="switch" class="x-switch" data-sw="${key}" ${on ? "checked" : ""} ${dis ? "disabled" : ""} aria-label="${esc(label.replace(/<[^>]+>/g, ""))}" /></label>`;
   const bar = (title, opts = {}) =>
     `<header class="x-bar ${opts.back ? "x-bar--back" : ""}">${opts.back ? `<button class="x-icon-btn" data-act="${opts.back}" aria-label="Back">${ic(opts.closeIcon ? "close" : "back")}</button>` : ""}<h1 class="${opts.big ? "x-bar__big" : ""}">${title}</h1>${opts.right || ""}</header>`;
-  const tripById = (id) => S.trips.find((t) => t.id === id) || S.trips[0];
+  const tripById = (id) => S.trips.find((t) => t.id === id) || S.trips[0] || null;
   const visLabel = (v) => {
     const on = [v.business && "Business", v.social && "Social"].filter(Boolean);
     return on.length ? "Visible: " + on.join(", ") : "Hidden";
   };
-  const matchesFor = (trip) => MATCHES.filter((m) => !S.gone[m.id] && (trip.id === "t1" || !m.all));
-  const tripCount = (trip) => (trip.id === "t1" ? Math.max(0, trip.count - Object.keys(S.gone).length) : matchesFor(trip).length);
+  const matchesFor = (trip) => (trip && S.matches ? S.matches.filter((m) => m.tripId === trip.id && !S.gone[m.id]) : []);
+  const tripCount = (trip) => (trip ? matchesFor(trip).length : 0);
   const fmtDate = (iso) => {
     const d = new Date(iso + "T12:00:00");
     return isNaN(d) ? iso : d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).replace(",", "");
@@ -1230,19 +1209,19 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
   V.phone = () => `${bar("", { back: "go", closeIcon: false })}
     <div class="x-body">
       <p class="x-big">What's your phone number?</p>
-      <p class="x-sub">We'll text you a code. Your number is never shown to matches.</p>
-      <div class="x-inline"><span class="x-prefix">+91</span><input class="x-input" data-bind="phone" inputmode="tel" aria-label="Phone number" value="${esc(S.phone)}" /></div>
+      <p class="x-sub">We'll text you a verification code. Your number is never shown to matches.</p>
+      <div class="x-inline"><span class="x-prefix">+91</span><input class="x-input" data-bind="phone" inputmode="tel" maxlength="10" placeholder="Enter 10-digit mobile" aria-label="Phone number" value="${esc(S.phone)}" /></div>
     </div>
-    <div class="x-foot"><button class="x-btn" data-act="go" data-v="otp">Send OTP</button></div>`;
+    <div class="x-foot"><button class="x-btn" data-act="sendOtp">Send OTP</button></div>`;
 
   V.otp = () => `${bar("", { back: "go" })}
     <div class="x-body">
       <p class="x-big">Enter the 4-digit code</p>
-      <p class="x-sub">Sent to +91 ${esc(S.phone)}. Any code works in this prototype.</p>
+      <p class="x-sub">Sent to +91 ${esc(S.phone || "your mobile")}. Enter any 4-digit OTP to continue.</p>
       <div class="x-otp">${S.otp.map((v, i) => `<input inputmode="numeric" maxlength="1" data-otp="${i}" aria-label="Digit ${i + 1}" value="${esc(v)}" />`).join("")}</div>
       <button class="x-btn x-btn--sm x-btn--ghost" style="justify-self:start" data-act="toast" data-v="New code sent">Resend code</button>
     </div>
-    <div class="x-foot"><button class="x-btn" data-act="go" data-v="mode">Verify</button></div>`;
+    <div class="x-foot"><button class="x-btn" data-act="verifyOtp">Verify</button></div>`;
 
   V.mode = () => `${bar("", { back: "go" })}
     <div class="x-body">
@@ -1257,18 +1236,18 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     const p = S.p;
     const biz = S.modes.business ? `
       <p class="x-h">Business</p>
-      <label class="x-field"><span>Name</span><input class="x-input" data-bind="p.name" value="${esc(p.name)}" /></label>
-      <label class="x-field"><span>Company</span><input class="x-input" data-bind="p.company" value="${esc(p.company)}" /></label>
+      <label class="x-field"><span>Full Name</span><input class="x-input" data-bind="p.name" placeholder="e.g. Rahul Sharma" value="${esc(p.name)}" /></label>
+      <label class="x-field"><span>Company</span><input class="x-input" data-bind="p.company" placeholder="e.g. Sharma Textiles" value="${esc(p.company)}" /></label>
       <div class="x-field"><span>Industry</span>${chipSet("industry", IND, p.industry, true)}</div>
       <div class="x-field"><span>I'm looking to</span>${chipSet("look", LOOK, p.look)}</div>
       <div class="x-field"><span>Cities</span>${chipSet("cities", CITIES, p.cities)}</div>
       <div class="x-field"><span>GSTIN (optional)</span>
-        <div class="x-inline"><input class="x-input" data-bind="p.gstin" value="${esc(p.gstin)}" aria-label="GSTIN" ${p.verified ? "readonly" : ""} />${p.verified ? "" : `<button class="x-btn x-btn--sm" data-act="gst">Verify</button>`}</div>
+        <div class="x-inline"><input class="x-input" data-bind="p.gstin" placeholder="15-character GSTIN" value="${esc(p.gstin)}" aria-label="GSTIN" ${p.verified ? "readonly" : ""} />${p.verified ? "" : `<button class="x-btn x-btn--sm" data-act="gst">Verify</button>`}</div>
         ${p.verified ? `<span>${ver("Verified business")}</span>` : p.gstErr ? `<span class="x-err">${p.gstErr}</span>` : ""}
       </div>` : "";
     const soc = S.modes.social ? `
       <p class="x-h">Social</p>
-      <label class="x-field"><span>First name</span><input class="x-input" data-bind="p.first" value="${esc(p.first)}" /></label>
+      <label class="x-field"><span>First name</span><input class="x-input" data-bind="p.first" placeholder="e.g. Rahul" value="${esc(p.first)}" /></label>
       <div class="x-field"><span>Interests</span>${chipSet("interests", INTERESTS, p.interests)}</div>
       <div class="x-field"><span>Languages</span>${chipSet("langs", LANGS, p.langs)}</div>` : "";
     return `${bar(S.editing ? "Edit profile" : "Create profile", { back: S.editing ? "doneEdit" : "go" })}
@@ -1288,7 +1267,13 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
   V.trips = () => `${bar("Trips", { big: true, right: `<button class="x-icon-btn x-icon-btn--fill" data-act="addTrip" aria-label="Add trip">${ic("plus", 20)}</button>` })}
     <div class="x-body">
       <p class="x-h">Upcoming</p>
-      ${S.trips.map(tripCard).join("")}
+      ${S.trips.length ? S.trips.map(tripCard).join("") : `
+        <div class="x-empty" style="padding:48px 16px;text-align:center">
+          <span style="font-size:36px;display:block;margin-bottom:12px">🚆</span>
+          <b style="display:block;font-size:16px;margin-bottom:6px">No upcoming trips</b>
+          <p style="color:var(--text-secondary,#6b7280);font-size:13px;margin-bottom:16px">Add your journey by 10-digit PNR to connect with passengers on board.</p>
+        </div>
+      `}
       <button class="x-btn x-btn--line" data-act="addTrip">${ic("plus", 18)} Add trip</button>
       <div class="x-note">${ic("shield", 18)}<span>Only opted-in travellers on the same train or flight can see you, and both of you must accept before chatting.</span></div>
     </div>`;
@@ -1314,7 +1299,7 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     }
     const train = a.kind === "train";
     const form = train
-      ? `<label class="x-field"><span>PNR (10 digits)</span><input class="x-input" data-bind="add.pnr" inputmode="numeric" maxlength="10" value="${esc(a.pnr)}" /></label>`
+      ? `<label class="x-field"><span>PNR (10 digits)</span><input class="x-input" data-bind="add.pnr" inputmode="numeric" maxlength="10" placeholder="e.g. 8655220078" value="${esc(a.pnr)}" /></label>`
       : `<label class="x-field"><span>Flight number</span><input class="x-input" data-bind="add.flight" value="${esc(a.flight)}" /></label>
          <label class="x-field"><span>Date</span><input class="x-input" type="date" data-bind="add.date" value="${esc(a.date)}" /></label>`;
     const f = a.found;
@@ -1322,8 +1307,8 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
       <div class="x-body">${steps}
         <div class="x-seg" role="group" aria-label="Trip type"><button data-act="kind" data-v="train" ${pressed(train)}>Train</button><button data-act="kind" data-v="flight" ${pressed(!train)}>Flight</button></div>
         ${form}
-        ${a.err ? `<span class="x-err">${a.err}</span>` : ""}
-        ${f ? `<div class="x-card x-found"><span>${ver("Trip found")}</span><span class="x-trip__top"><span class="x-trip__ic">${ic(f.kind === "flight" ? "plane" : "train", 20)}</span><span><b>${esc(f.name)}</b><small>${esc(f.route)}</small></span></span><span class="x-trip__when">${esc(f.when)}</span></div>` : ""}
+        ${a.err ? `<span class="x-err" style="color:#b91c1c;background:#fef2f2;padding:9px 12px;border:1px solid #fecaca;border-radius:8px;font-size:12px;display:block;margin-top:8px;line-height:1.4">${esc(a.err)}</span>` : ""}
+        ${f ? `<div class="x-card x-found"><span>${ver("Trip found")}</span><span class="x-trip__top"><span class="x-trip__ic">${ic(f.kind === "flight" ? "plane" : "train", 20)}</span><span><b>${esc(f.name)}</b><small>${esc(f.route)}</small></span></span><span class="x-trip__when">${esc(f.when)}</span>${f.coach ? `<small style="display:block;margin-top:6px;color:#475569">Coach: <b>${esc(f.coach)}</b>${f.berth ? ` · ${esc(f.berth)}` : ''}</small>` : ''}</div>` : ""}
       </div>
       <div class="x-foot">${f ? `<button class="x-btn" data-act="addNext">Continue</button>` : `<button class="x-btn" data-act="fetch" ${a.loading ? "disabled" : ""}>${a.loading ? "Finding your trip…" : train ? "Fetch trip" : "Find flight"}</button>`}</div>`;
   };
@@ -1346,6 +1331,17 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
 
   V.matches = () => {
     const trip = tripById(S.selTrip);
+    if (!trip) {
+      return `${bar("Matches", { big: true })}
+        <div class="x-body">
+          <div class="x-empty" style="padding:48px 16px;text-align:center">
+            <span style="font-size:36px;display:block;margin-bottom:12px">👥</span>
+            <b style="display:block;font-size:16px;margin-bottom:6px">No trips active</b>
+            <p style="color:var(--text-secondary,#6b7280);font-size:13px;margin-bottom:16px">Add your upcoming train or flight to see matching co-travelers.</p>
+            <button class="x-btn x-btn--sm" data-act="tab" data-v="trips">Go to Trips</button>
+          </div>
+        </div>`;
+    }
     const all = matchesFor(trip);
     const list = all.filter((m) => S.filter === "All" || (S.filter === "Same industry" ? m.industry === S.p.industry : m.type === S.filter));
     const total = tripCount(trip);
@@ -1354,26 +1350,28 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
         <label class="x-field"><span>Trip</span><select class="x-select" data-bind="selTrip">${S.trips.map((t) => `<option value="${t.id}" ${t.id === trip.id ? "selected" : ""}>${esc(t.name)} · ${esc(t.when)}</option>`).join("")}</select></label>
         <div class="x-chips x-chips--scroll" role="group" aria-label="Filter">${FILTERS.map((f) => `<button class="x-chip" data-act="filter" data-v="${f}" ${pressed(S.filter === f)}>${f}</button>`).join("")}</div>
         <p class="x-sub">${total > all.length ? `Showing ${all.length} of ${total} matches` : `${all.length} matches`} · ${esc(trip.route)}</p>
-        ${list.length ? list.map(matchCard).join("") : `<div class="x-empty"><b>No ${S.filter.toLowerCase()} matches yet</b>More people join closer to departure.</div>`}
+        ${list.length ? list.map(matchCard).join("") : `<div class="x-empty" style="padding:32px 16px;text-align:center"><b>No ${S.filter.toLowerCase()} matches yet</b><p style="color:var(--text-secondary,#6b7280);font-size:13px;margin-top:6px">Matches will appear when other passengers on this train opt in.</p></div>`}
       </div>`;
   };
 
   /* ---------- chats ---------- */
   const lastText = (id) => {
-    const m = S.chats[id].filter((x) => x.from !== "sys").pop();
+    const list = S.chats[id] || [];
+    const m = list.filter((x) => x.from !== "sys").pop();
     return m ? (m.card ? "Business card shared" : (m.from === "me" ? "You: " : "") + m.text) : "";
   };
   V.chats = () => `${bar("Chats", { big: true })}
     <div class="x-body">
-      ${S.order.length ? `<div class="x-list">${S.order.map((id) => { const m = BYID[id]; return `<button class="x-li" data-act="openChat" data-v="${id}"><span class="x-av">${m.ini}</span><span class="x-li__main"><b>${esc(m.name)}${S.unread[id] ? " ·" : ""}</b><small>${esc(lastText(id))}</small></span>${S.unread[id] ? '<span class="x-badge" style="position:static">1</span>' : `<span class="x-chev">${ic("chev", 18)}</span>`}</button>`; }).join("")}</div>
+      ${S.order.length ? `<div class="x-list">${S.order.map((id) => { const m = BYID[id]; if (!m) return ""; return `<button class="x-li" data-act="openChat" data-v="${id}"><span class="x-av">${m.ini}</span><span class="x-li__main"><b>${esc(m.name)}${S.unread[id] ? " ·" : ""}</b><small>${esc(lastText(id))}</small></span>${S.unread[id] ? '<span class="x-badge" style="position:static">1</span>' : `<span class="x-chev">${ic("chev", 18)}</span>`}</button>`; }).join("")}</div>
       <p class="fineprint">Chats open only after both of you accept.</p>`
-      : `<div class="x-empty">${ic("chat", 32)}<b>No chats yet</b>Connect with a match. Chats open once you both accept.<button class="x-btn x-btn--sm" data-act="tab" data-v="matches">See matches</button></div>`}
+      : `<div class="x-empty" style="padding:48px 16px;text-align:center">${ic("chat", 36)}<b style="display:block;margin-top:12px">No chats yet</b><p style="color:var(--text-secondary,#6b7280);font-size:13px;margin-top:6px">Connect with verified co-passengers on your train. Chats open once both accept.</p></div>`}
     </div>`;
 
   V.chat = () => {
     const m = BYID[S.active];
+    if (!m) { S.active = null; return V.chats(); }
     const msgs = S.chats[S.active] || [];
-    const meCard = `<div class="x-msg__card"><b>${esc(S.p.name)}</b><span>${esc(S.p.company)} · ${esc(S.p.industry)}</span><small>+91 ${esc(S.phone)} · shared by you</small></div>`;
+    const meCard = `<div class="x-msg__card"><b>${esc(S.p.name || S.p.first || "You")}</b><span>${esc([S.p.company, S.p.industry].filter(Boolean).join(" · "))}</span><small>+91 ${esc(S.phone)} · shared by you</small></div>`;
     return `<header class="x-bar x-bar--back"><button class="x-icon-btn" data-act="closeChat" aria-label="Back">${ic("back")}</button>
         <span class="x-chathead"><span class="x-av x-av--sm">${m.ini}</span><span style="min-width:0"><b>${esc(m.name)}</b><small>${esc(m.company)}</small></span></span>
         <button class="x-icon-btn" data-act="menu" aria-label="More options" aria-expanded="${S.menu}">${ic("more")}</button></header>
@@ -1390,11 +1388,14 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
   /* ---------- profile ---------- */
   V.profile = () => {
     const p = S.p;
+    const displayName = p.name || p.first || "Your Profile";
+    const initials = displayName.split(" ").filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "ME";
+    const subtitle = [p.company, p.industry].filter(Boolean).join(" · ") || (S.phone ? `+91 ${S.phone}` : "No details added");
     return `${bar("Profile", { big: true })}
       <div class="x-body">
-        <div class="x-card"><div class="x-m__top"><span class="x-av x-av--lg">${p.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
-          <span class="x-m__name"><b>${esc(p.name)}</b><small>${esc(p.company)} · ${esc(p.industry)}</small>${p.verified ? ver("Verified business") : `<small>Not verified yet</small>`}</span></div>
-          <div class="x-m__tags">${p.cities.map((c) => `<span class="pill">${esc(c)}</span>`).join("")}${p.look.map((l) => `<span class="pill">${esc(l)}</span>`).join("")}</div>
+        <div class="x-card"><div class="x-m__top"><span class="x-av x-av--lg">${initials}</span>
+          <span class="x-m__name"><b>${esc(displayName)}</b><small>${esc(subtitle)}</small>${p.verified ? ver("Verified business") : `<small style="color:var(--text-secondary,#6b7280)">Not verified yet</small>`}</span></div>
+          <div class="x-m__tags">${(p.cities || []).map((c) => `<span class="pill">${esc(c)}</span>`).join("")}${(p.look || []).map((l) => `<span class="pill">${esc(l)}</span>`).join("")}</div>
           <div class="x-row2"><button class="x-btn x-btn--sm x-btn--line" style="width:100%" data-act="edit">Edit profile</button>${p.verified ? "" : `<button class="x-btn x-btn--sm" style="width:100%" data-act="gstProfile">Verify GSTIN</button>`}</div>
         </div>
         <p class="x-h">Modes</p>
@@ -1408,12 +1409,11 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
         <p class="x-h">Privacy</p>
         <div class="x-list">
           ${sw("locked", true, `Delete trip data after travel`, "Always on", true)}
-          <button class="x-li" data-act="toast" data-v="Your data export is being prepared (sample)">${ic("down", 20)}<span class="x-li__main">Download my data</span><span class="x-chev">${ic("chev", 18)}</span></button>
+          <button class="x-li" data-act="toast" data-v="Your data export is being prepared">${ic("down", 20)}<span class="x-li__main">Download my data</span><span class="x-chev">${ic("chev", 18)}</span></button>
           <button class="x-li x-li--danger" data-act="sheet" data-v="delete">${ic("trash", 20)}<span class="x-li__main">Delete account</span></button>
         </div>
         <div class="x-list"><button class="x-li" data-act="sheet" data-v="safety">${ic("shield", 20)}<span class="x-li__main">Safety centre<small>Tips, blocking and reporting</small></span><span class="x-chev">${ic("chev", 18)}</span></button></div>
         <button class="x-btn x-btn--line" data-act="logout">${ic("out", 18)} Log out</button>
-        <p class="fineprint" style="text-align:center">TripLink prototype · sample data only</p>
       </div>`;
   };
 
@@ -1467,7 +1467,7 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     const un = Object.keys(S.unread).length;
     return `<nav class="x-tabs" aria-label="Tabs">${TABS.map(([k, l, i]) => `<button class="x-tab" data-act="tab" data-v="${k}" ${S.tab === k ? 'aria-current="page"' : ""}>${ic(i, 24)}${l}${k === "chats" && un ? `<span class="x-badge">${un}</span>` : ""}</button>`).join("")}</nav>`;
   };
-  const statusBar = () => `<div class="x-status"><span>9:41</span><span class="x-proto">Prototype — sample data</span><span class="x-status__icons"><svg width="18" height="11" viewBox="0 0 18 11" aria-hidden="true"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/><rect x="5" y="5" width="3" height="6" rx="1" fill="currentColor"/><rect x="10" y="2.5" width="3" height="8.5" rx="1" fill="currentColor"/><rect x="15" y="0" width="3" height="11" rx="1" fill="currentColor"/></svg><svg width="25" height="12" viewBox="0 0 25 12" aria-hidden="true"><rect x=".5" y=".5" width="21" height="11" rx="3" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".7" fill="currentColor" opacity=".4"/></svg></span></div>`;
+  const statusBar = () => "";
 
   /* ---------- render ---------- */
   function render() {
@@ -1528,6 +1528,23 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
 
   const A = {
     go: (v) => { S.screen = v || PREV[S.screen] || "welcome"; },
+    sendOtp: () => {
+      const clean = (S.phone || "").replace(/\D/g, "");
+      if (clean.length < 10) {
+        toast("Enter a valid 10-digit mobile number");
+        return;
+      }
+      S.otp = ["", "", "", ""];
+      S.screen = "otp";
+    },
+    verifyOtp: () => {
+      const code = S.otp.join("").replace(/\D/g, "");
+      if (code.length < 4) {
+        toast("Enter the 4-digit code");
+        return;
+      }
+      S.screen = "mode";
+    },
     toast: (v) => toast(v),
     mode: (v) => { S.modes[v] = !S.modes[v]; },
     pick: (v, el) => { S.p[el.dataset.f] = v; },
@@ -1540,7 +1557,8 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     save: () => {
       const first = !S.editing;
       S.screen = "main"; S.sub = null; S.tab = S.editing ? "profile" : "trips"; S.editing = false;
-      toast(first ? "Profile saved. Welcome, " + (S.p.name.split(" ")[0] || S.p.first) : "Profile updated");
+      const firstName = S.p.name ? S.p.name.split(" ")[0] : (S.p.first || "Traveler");
+      toast(first ? "Profile saved. Welcome, " + firstName : "Profile updated");
     },
     edit: () => { S.editing = true; S.screen = "create"; },
     doneEdit: () => { S.editing = false; S.screen = "main"; },
@@ -1570,19 +1588,21 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
             a.loading = false;
             a.found = {
               kind: "train",
-              name: `${d.trainName} ${d.trainNumber}`,
+              name: `${d.trainName} (${d.trainNumber})`,
               route: `${d.fromName || d.fromCode} → ${d.toName || d.toCode}`,
               when: d.travelDate ? `${d.travelDate}` : "Today",
               coach: d.coach,
+              berth: d.berthNumber ? `Berth ${d.berthNumber} (${d.berthType})` : "",
               pnrMasked: d.maskedPnr
             };
           } else {
             a.loading = false;
-            a.err = (json && json.error) || "Could not verify PNR";
+            const r = (json && (json.reason || json.error)) || "Ticket not found in IRCTC database";
+            a.err = `Not found: ${r}`;
           }
         } catch (e) {
           a.loading = false;
-          a.err = "Verification failed. Check connection.";
+          a.err = "Verification failed. Check network connection.";
         }
       } else {
         setTimeout(() => {
@@ -1597,9 +1617,11 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     addNext: () => { S.add.step = 2; },
     confirmTrip: () => {
       const a = S.add, id = "t" + ++uid;
-      S.trips.push({ id, ...a.found, vis: { ...a.vis, women: a.vis.women && a.vis.social } });
+      const newTrip = { id, ...a.found, count: 0, vis: { ...a.vis, women: a.vis.women && a.vis.social } };
+      S.trips.push(newTrip);
+      S.selTrip = id;
       S.sub = null; S.add = null; S.tab = "trips";
-      toast("Trip added. Matches are ready.", { act: "openTrip", v: id, label: "View" });
+      toast("Trip added successfully", { act: "openTrip", v: id, label: "View" });
     },
     openTrip: (v) => { S.selTrip = v; S.filter = "All"; S.tab = "matches"; S.sub = null; $toast.innerHTML = ""; },
     filter: (v) => { S.filter = v; },
@@ -1607,26 +1629,14 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     connect: (v) => {
       S.req[v] = "sent";
       const m = BYID[v];
-      toast("Request sent to " + m.name.split(" ")[0]);
-      if (v === "rakesh") setTimeout(() => {
-        if (S.gone.rakesh || S.req.rakesh !== "sent") return;
-        S.req.rakesh = "accepted";
-        S.chats.rakesh = [
-          { from: "sys", text: "You're both on Vande Bharat 20901, Mon 12 Oct. Contact details stay hidden until you share them." },
-          { from: "them", text: "Hi Jeenav, I'm looking for cotton cambric suppliers. What do you print?" },
-        ];
-        if (!S.order.includes("rakesh")) S.order.unshift("rakesh");
-        S.unread.rakesh = true;
-        render();
-        toast("Rakesh accepted — say hello", { act: "openChat", v: "rakesh", label: "Chat" });
-      }, 2000);
+      toast("Request sent" + (m ? " to " + m.name.split(" ")[0] : ""));
     },
     openChat: (v) => { openChat(v); $toast.innerHTML = ""; },
     closeChat: () => { S.sub = null; S.menu = false; S.typing = null; },
     menu: () => { S.menu = !S.menu; },
     quick: (v) => send(v),
-    shareCard: () => { S.menu = false; S.chats[S.active].push({ from: "me", card: true }); toast("Business card shared"); },
-    block: (v) => { const n = BYID[v].name; S.sheet = null; S.menu = false; removePerson(v); toast("Blocked " + n + ". They can no longer see you."); },
+    shareCard: () => { S.menu = false; if (S.chats[S.active]) S.chats[S.active].push({ from: "me", card: true }); toast("Business card shared"); },
+    block: (v) => { const m = BYID[v]; const n = m ? m.name : "User"; S.sheet = null; S.menu = false; removePerson(v); toast("Blocked " + n + ". They can no longer see you."); },
     report: (v) => { S.menu = false; S.sheet = { kind: "report", id: v, reason: null, done: false }; },
     reason: (v) => { S.sheet.reason = v; },
     submitReport: () => { S.sheet.done = true; },
@@ -1634,7 +1644,7 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     sheet: (v) => { S.sheet = { kind: v }; },
     closeSheet: () => { S.sheet = null; },
     pro: () => { S.pro = true; toast("Pro trial started — 7 days free. No payment taken."); },
-    logout: () => { const t = toastTimer; clearTimeout(t); S = fresh(); $toast.innerHTML = ""; lastKey = ""; },
+    logout: () => { const t = toastTimer; clearTimeout(t); S = fresh(); $toast.innerHTML = ""; lastKey = ""; render(); toast("Logged out"); },
   };
 
   /* ---------- events ---------- */

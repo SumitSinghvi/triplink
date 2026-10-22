@@ -8,29 +8,40 @@ export async function POST(request: NextRequest) {
 
     if (!pnr || typeof pnr !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'PNR number is required' },
+        { success: false, error: 'PNR number is required', reason: 'Missing PNR field' },
         { status: 400 }
       );
     }
 
-    const { result, source } = await verifyPNRWaterfall(pnr, { forceFresh });
+    const verification = await verifyPNRWaterfall(pnr, { forceFresh });
+
+    if (!verification.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: verification.error,
+          reason: verification.reason,
+        },
+        { status: 404 }
+      );
+    }
 
     // Privacy safeguard: Never expose raw PNR in API output
     const safeData = {
-      ...result,
+      ...verification.result,
       pnr: undefined,
     };
 
     return NextResponse.json({
       success: true,
-      source,
+      source: verification.source,
       data: safeData,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to verify PNR';
     return NextResponse.json(
-      { success: false, error: message },
-      { status: 400 }
+      { success: false, error: 'Internal Error', reason: message },
+      { status: 500 }
     );
   }
 }

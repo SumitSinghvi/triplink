@@ -1,4 +1,4 @@
-import { DecodedPNRResult, decodePNR, validatePNR } from '@/lib/pnr';
+import { DecodedPNRResult, validatePNR } from '@/lib/pnr';
 import { PnrCache } from './cache';
 import { scrapeConfirmTkt } from './confirmtkt';
 import { scrapeEaseMyTrip } from './easemytrip';
@@ -7,73 +7,63 @@ export interface VerifyPNROptions {
   forceFresh?: boolean;
 }
 
+export type VerifyWaterfallResult =
+  | { success: true; result: DecodedPNRResult; source: string }
+  | { success: false; error: string; reason: string };
+
 export async function verifyPNRWaterfall(
   pnr: string,
   options: VerifyPNROptions = {}
-): Promise<{ result: DecodedPNRResult; source: string }> {
+): Promise<VerifyWaterfallResult> {
   const cleanPnr = pnr.replace(/[\s-]/g, '');
 
   if (!validatePNR(cleanPnr)) {
-    throw new Error('Invalid PNR format. Must be a 10-digit number starting with 1-9.');
+    return {
+      success: false,
+      error: 'Invalid PNR',
+      reason: 'PNR must be exactly 10 digits starting with 1-9',
+    };
   }
 
   // 1. Check Cache (0 network calls)
   if (!options.forceFresh) {
     const cached = PnrCache.get(cleanPnr);
     if (cached) {
-      return { result: cached.data, source: 'cache' };
+      return { success: true, result: cached.data, source: 'cache' };
     }
   }
+
+  let lastReason = 'Ticket not found or flushed from IRCTC database';
 
   // 2. Try Provider 1: ConfirmTkt API
   try {
-    const fromConfirmTkt = await scrapeConfirmTkt(cleanPnr);
-    if (fromConfirmTkt) {
-      PnrCache.set(cleanPnr, fromConfirmTkt, 'confirmtkt');
-      return { result: fromConfirmTkt, source: 'confirmtkt' };
+    const confirmRes = await scrapeConfirmTkt(cleanPnr);
+    if (confirmRes.success && confirmRes.data) {
+      PnrCache.set(cleanPnr, confirmRes.data, 'confirmtkt');
+      return { success: true, result: confirmRes.data, source: 'confirmtkt' };
+    }
+    if (confirmRes.reason) {
+      lastReason = confirmRes.reason;
     }
   } catch (err) {
-    console.warn('ConfirmTkt lookup failed, falling through...', err);
+    console.warn('ConfirmTkt lookup error:', err);
   }
 
-  // 3. Try Provider 2: EaseMyTrip
+  // 3. Try Provider 2: EaseMyTrip (as backup)
   try {
     const fromEaseMyTrip = await scrapeEaseMyTrip(cleanPnr);
     if (fromEaseMyTrip) {
       PnrCache.set(cleanPnr, fromEaseMyTrip, 'easemytrip');
-      return { result: fromEaseMyTrip, source: 'easemytrip' };
+      return { success: true, result: fromEaseMyTrip, source: 'easemytrip' };
     }
   } catch (err) {
-    console.warn('EaseMyTrip lookup failed, falling through...', err);
+    console.warn('EaseMyTrip lookup error:', err);
   }
 
-  // 4. Try RapidAPI if key configured in .env.local
-  if (process.env.IRCTC_RAPIDAPI_KEY) {
-    try {
-      const res = await fetch(
-        `https://${process.env.IRCTC_RAPIDAPI_HOST || 'irctc1.p.rapidapi.com'}/api/v3/getPNRStatus?pnrNumber=${cleanPnr}`,
-        {
-          headers: {
-            'X-RapidAPI-Key': process.env.IRCTC_RAPIDAPI_KEY,
-            'X-RapidAPI-Host': process.env.IRCTC_RAPIDAPI_HOST || 'irctc1.p.rapidapi.com',
-          },
-        }
-      );
-      if (res.ok) {
-        const rapidData = await res.json();
-        if (rapidData.data?.trainNumber) {
-          const formatted = await decodePNR(cleanPnr);
-          PnrCache.set(cleanPnr, formatted, 'rapidapi');
-          return { result: formatted, source: 'rapidapi' };
-        }
-      }
-    } catch (err) {
-      console.warn('RapidAPI lookup failed, falling through...', err);
-    }
-  }
-
-  // 5. Deterministic fallback (guarantees app NEVER crashes or halts for users)
-  const fallbackResult = await decodePNR(cleanPnr);
-  PnrCache.set(cleanPnr, fallbackResult, 'fallback_engine');
-  return { result: fallbackResult, source: 'fallback_engine' };
+  // NO FAKE FALLBACK DATA. If not found in live database, return clean error with exact reason.
+  return {
+    success: false,
+    error: 'PNR not found',
+    reason: lastReason,
+  };
 }

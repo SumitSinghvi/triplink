@@ -1,7 +1,13 @@
 import { DecodedPNRResult, maskPNR } from '@/lib/pnr';
 import { TravelClass, BerthPreference } from '@/types';
 
-export async function scrapeConfirmTkt(pnr: string): Promise<DecodedPNRResult | null> {
+export interface ScrapeConfirmTktResult {
+  success: boolean;
+  data?: DecodedPNRResult;
+  reason?: string;
+}
+
+export async function scrapeConfirmTkt(pnr: string): Promise<ScrapeConfirmTktResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
@@ -19,11 +25,42 @@ export async function scrapeConfirmTkt(pnr: string): Promise<DecodedPNRResult | 
 
     clearTimeout(timeoutId);
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return {
+        success: false,
+        reason: `IRCTC gateway returned HTTP ${response.status}`,
+      };
+    }
 
     const raw = await response.json();
 
-    if (!raw || !raw.TrainNo || raw.Error) return null;
+    if (!raw) {
+      return {
+        success: false,
+        reason: 'Empty response received from railway gateway',
+      };
+    }
+
+    if (raw.Error) {
+      return {
+        success: false,
+        reason: raw.Error,
+      };
+    }
+
+    if (raw.InformationMessage) {
+      return {
+        success: false,
+        reason: raw.InformationMessage,
+      };
+    }
+
+    if (!raw.TrainNo || !raw.TrainName) {
+      return {
+        success: false,
+        reason: 'PNR not found or ticket has been flushed from IRCTC servers',
+      };
+    }
 
     const firstPassenger = raw.PassengerStatus?.[0] || {};
     const coach = firstPassenger.Coach || raw.Class || 'C1';
@@ -43,11 +80,16 @@ export async function scrapeConfirmTkt(pnr: string): Promise<DecodedPNRResult | 
     else if (bCode.includes('u') || bCode.includes('upper')) berthType = 'Upper';
     else if (bCode.includes('a') || bCode.includes('aisle')) berthType = 'Aisle';
 
-    return {
+    const rawStatus = (firstPassenger.CurrentStatus || firstPassenger.ConfirmTktStatus || 'CNF').toUpperCase();
+    let status: 'CONFIRMED' | 'RAC' | 'WL' = 'CONFIRMED';
+    if (rawStatus.includes('RAC')) status = 'RAC';
+    else if (rawStatus.includes('WL')) status = 'WL';
+
+    const data: DecodedPNRResult = {
       pnr,
       maskedPnr: maskPNR(pnr),
       trainNumber: String(raw.TrainNo).trim(),
-      trainName: raw.TrainName || 'Express',
+      trainName: raw.TrainName,
       travelDate: raw.Doj || new Date().toISOString().split('T')[0],
       fromCode: raw.From || raw.BoardingPoint || '',
       fromName: raw.BoardingStationName || raw.SourceName || raw.From || '',
@@ -57,12 +99,22 @@ export async function scrapeConfirmTkt(pnr: string): Promise<DecodedPNRResult | 
       coach,
       berthType,
       berthNumber,
-      status: 'CONFIRMED',
+      status,
       chartPrepared: Boolean(raw.ChartPrepared),
     };
-  } catch (err) {
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (err: unknown) {
     clearTimeout(timeoutId);
-    console.error('ConfirmTkt API error:', err);
-    return null;
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
+    return {
+      success: false,
+      reason: isTimeout
+        ? 'Railway server response timed out (8s)'
+        : 'Network error connecting to railway gateway',
+    };
   }
 }
