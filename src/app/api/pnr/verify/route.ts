@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { decodePNR, validatePNR } from '@/lib/pnr';
+import { verifyPNRWaterfall } from '@/lib/pnrScraper';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { pnr } = body;
+    const { pnr, forceFresh } = body;
 
     if (!pnr || typeof pnr !== 'string') {
       return NextResponse.json(
@@ -13,32 +13,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cleanPnr = pnr.replace(/[\s-]/g, '');
-    if (!validatePNR(cleanPnr)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid PNR format. Must be a 10-digit number starting with 1-9.',
-        },
-        { status: 400 }
-      );
-    }
+    const { result, source } = await verifyPNRWaterfall(pnr, { forceFresh });
 
-    const result = await decodePNR(cleanPnr);
+    // Privacy safeguard: Never expose raw PNR in API output
+    const safeData = {
+      ...result,
+      pnr: undefined,
+    };
 
-    // Notice: we do NOT expose raw PNR in response, only maskedPnr
     return NextResponse.json({
       success: true,
-      data: {
-        ...result,
-        pnr: undefined, // strip raw PNR for privacy
-      },
+      source,
+      data: safeData,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to verify PNR';
     return NextResponse.json(
       { success: false, error: message },
-      { status: 500 }
+      { status: 400 }
     );
   }
 }
