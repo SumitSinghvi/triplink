@@ -1521,6 +1521,9 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     let o = S;
     while (k.length > 1) o = o[k.shift()];
     o[k[0]] = val;
+    if (path === "add.pnr" || path === "add.flight") {
+      if (S.add) { S.add.found = null; S.add.err = ""; }
+    }
   }
 
   const A = {
@@ -1546,17 +1549,50 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
     closeAdd: () => { S.sub = null; S.add = null; },
     addBack: () => { S.add.step = 1; },
     kind: (v) => { S.add.kind = v; S.add.found = null; S.add.err = ""; },
-    fetch: () => {
+    fetch: async () => {
       const a = S.add;
       if (a.kind === "train" && !/^\d{10}$/.test(a.pnr.replace(/\s/g, ""))) { a.err = "Enter the 10-digit PNR from your ticket"; return; }
       if (a.kind === "flight" && !a.flight.trim()) { a.err = "Enter a flight number"; return; }
       a.err = ""; a.loading = true;
-      setTimeout(() => {
-        if (S.add !== a) return;
-        a.loading = false;
-        a.found = a.kind === "train" ? { ...FOUND.train } : { kind: "flight", name: a.flight.trim().toUpperCase(), route: "Ahmedabad (AMD) → Mumbai (BOM)", when: fmtDate(a.date) };
-        render();
-      }, 700);
+      render();
+
+      if (a.kind === "train") {
+        try {
+          const cleanPnr = a.pnr.replace(/\s/g, "");
+          const res = await window.fetch("/api/pnr/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pnr: cleanPnr })
+          });
+          const json = await res.json();
+          if (json && json.success && json.data) {
+            const d = json.data;
+            a.loading = false;
+            a.found = {
+              kind: "train",
+              name: `${d.trainName} ${d.trainNumber}`,
+              route: `${d.fromName || d.fromCode} → ${d.toName || d.toCode}`,
+              when: d.travelDate ? `${d.travelDate}` : "Today",
+              coach: d.coach,
+              pnrMasked: d.maskedPnr
+            };
+          } else {
+            a.loading = false;
+            a.err = (json && json.error) || "Could not verify PNR";
+          }
+        } catch (e) {
+          a.loading = false;
+          a.err = "Verification failed. Check connection.";
+        }
+      } else {
+        setTimeout(() => {
+          if (S.add !== a) return;
+          a.loading = false;
+          a.found = { kind: "flight", name: a.flight.trim().toUpperCase(), route: "Ahmedabad (AMD) → Mumbai (BOM)", when: fmtDate(a.date) };
+          render();
+        }, 500);
+      }
+      render();
     },
     addNext: () => { S.add.step = 2; },
     confirmTrip: () => {
