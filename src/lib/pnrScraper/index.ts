@@ -21,15 +21,15 @@ export async function verifyPNRWaterfall(
   if (!options.forceFresh) {
     const cached = PnrCache.get(cleanPnr);
     if (cached) {
-      return { result: cached, source: 'cache' };
+      return { result: cached.data, source: 'cache' };
     }
   }
 
-  // 2. Try Provider 1: ConfirmTkt
+  // 2. Try Provider 1: ConfirmTkt API
   try {
     const fromConfirmTkt = await scrapeConfirmTkt(cleanPnr);
     if (fromConfirmTkt) {
-      PnrCache.set(cleanPnr, fromConfirmTkt);
+      PnrCache.set(cleanPnr, fromConfirmTkt, 'confirmtkt');
       return { result: fromConfirmTkt, source: 'confirmtkt' };
     }
   } catch (err) {
@@ -40,7 +40,7 @@ export async function verifyPNRWaterfall(
   try {
     const fromEaseMyTrip = await scrapeEaseMyTrip(cleanPnr);
     if (fromEaseMyTrip) {
-      PnrCache.set(cleanPnr, fromEaseMyTrip);
+      PnrCache.set(cleanPnr, fromEaseMyTrip, 'easemytrip');
       return { result: fromEaseMyTrip, source: 'easemytrip' };
     }
   } catch (err) {
@@ -63,7 +63,7 @@ export async function verifyPNRWaterfall(
         const rapidData = await res.json();
         if (rapidData.data?.trainNumber) {
           const formatted = await decodePNR(cleanPnr);
-          PnrCache.set(cleanPnr, formatted);
+          PnrCache.set(cleanPnr, formatted, 'rapidapi');
           return { result: formatted, source: 'rapidapi' };
         }
       }
@@ -74,6 +74,6 @@ export async function verifyPNRWaterfall(
 
   // 5. Deterministic fallback (guarantees app NEVER crashes or halts for users)
   const fallbackResult = await decodePNR(cleanPnr);
-  PnrCache.set(cleanPnr, fallbackResult);
+  PnrCache.set(cleanPnr, fallbackResult, 'fallback_engine');
   return { result: fallbackResult, source: 'fallback_engine' };
 }

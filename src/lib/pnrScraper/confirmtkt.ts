@@ -3,18 +3,16 @@ import { TravelClass, BerthPreference } from '@/types';
 
 export async function scrapeConfirmTkt(pnr: string): Promise<DecodedPNRResult | null> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
-    const url = `https://www.confirmtkt.com/pnr-status/${pnr}`;
+    const url = `https://api.confirmtkt.com/api/pnr/status/${pnr}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
+          'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        Accept: 'application/json',
       },
       signal: controller.signal,
     });
@@ -23,31 +21,27 @@ export async function scrapeConfirmTkt(pnr: string): Promise<DecodedPNRResult | 
 
     if (!response.ok) return null;
 
-    const html = await response.text();
+    const raw = await response.json();
 
-    // Look for data object in script or raw text
-    const pattern = /data\s*=\s*({[\s\S]*?});/;
-    const match = html.match(pattern);
-
-    if (!match || !match[1]) return null;
-
-    const raw = JSON.parse(match[1]);
-
-    // Validate minimum required fields
-    if (!raw.TrainNo || !raw.From || !raw.To) return null;
+    if (!raw || !raw.TrainNo || raw.Error) return null;
 
     const firstPassenger = raw.PassengerStatus?.[0] || {};
-    const coach = firstPassenger.Coach || raw.Class || 'B1';
-    const berthNumber = parseInt(firstPassenger.Berth || '1', 10) || 1;
+    const coach = firstPassenger.Coach || raw.Class || 'C1';
+    const berthNumber = parseInt(String(firstPassenger.Berth || '1'), 10) || 1;
 
-    // Normalize berth preference
-    let berthType: BerthPreference = 'Lower';
-    const bLower = (firstPassenger.BerthType || '').toLowerCase();
-    if (bLower.includes('side lower')) berthType = 'Side Lower';
-    else if (bLower.includes('side upper')) berthType = 'Side Upper';
-    else if (bLower.includes('upper')) berthType = 'Upper';
-    else if (bLower.includes('middle')) berthType = 'Middle';
-    else if (bLower.includes('window')) berthType = 'Window';
+    let berthType: BerthPreference = 'Window';
+    const bCode = (
+      firstPassenger.BookingBerthCode ||
+      firstPassenger.CurrentBerthCode ||
+      ''
+    ).toLowerCase();
+    if (bCode.includes('ws') || bCode.includes('window')) berthType = 'Window';
+    else if (bCode.includes('sl') || bCode.includes('side lower')) berthType = 'Side Lower';
+    else if (bCode.includes('su') || bCode.includes('side upper')) berthType = 'Side Upper';
+    else if (bCode.includes('l') || bCode.includes('lower')) berthType = 'Lower';
+    else if (bCode.includes('m') || bCode.includes('middle')) berthType = 'Middle';
+    else if (bCode.includes('u') || bCode.includes('upper')) berthType = 'Upper';
+    else if (bCode.includes('a') || bCode.includes('aisle')) berthType = 'Aisle';
 
     return {
       pnr,
@@ -55,19 +49,20 @@ export async function scrapeConfirmTkt(pnr: string): Promise<DecodedPNRResult | 
       trainNumber: String(raw.TrainNo).trim(),
       trainName: raw.TrainName || 'Express',
       travelDate: raw.Doj || new Date().toISOString().split('T')[0],
-      fromCode: raw.From,
-      fromName: raw.FromName || raw.From,
-      toCode: raw.To,
-      toName: raw.ToName || raw.To,
-      travelClass: (raw.Class || '3A') as TravelClass,
+      fromCode: raw.From || raw.BoardingPoint || '',
+      fromName: raw.BoardingStationName || raw.SourceName || raw.From || '',
+      toCode: raw.To || raw.ReservationUpto || '',
+      toName: raw.ReservationUptoName || raw.DestinationName || raw.To || '',
+      travelClass: (raw.Class || 'CC') as TravelClass,
       coach,
       berthType,
       berthNumber,
-      status: raw.ChartPrepared ? 'CONFIRMED' : 'CONFIRMED',
+      status: 'CONFIRMED',
       chartPrepared: Boolean(raw.ChartPrepared),
     };
-  } catch {
+  } catch (err) {
     clearTimeout(timeoutId);
+    console.error('ConfirmTkt API error:', err);
     return null;
   }
 }
