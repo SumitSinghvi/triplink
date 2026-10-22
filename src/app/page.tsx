@@ -1,69 +1,381 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Users,
+  MessageSquare,
+  ShieldCheck,
+  Train,
+} from 'lucide-react';
+import {
+  UserProfile,
+  Trip,
+  LoungeMessage,
+  ConnectRequest,
+  DirectMessage,
+} from '@/types';
+import { StorageStore, DEFAULT_CURRENT_USER } from '@/lib/store';
+import { Navbar } from '@/components/Navbar';
+import { TripHero } from '@/components/TripHero';
+import { CoTravelersList } from '@/components/CoTravelersList';
+import { TrainLounge } from '@/components/TrainLounge';
+import { TripEntryModal } from '@/components/TripEntryModal';
+import { ConnectModal } from '@/components/ConnectModal';
+import { InboxDrawer } from '@/components/InboxDrawer';
+import { ProfileModal } from '@/components/ProfileModal';
+import { SafetyGuidelinesModal } from '@/components/SafetyGuidelinesModal';
 
 export default function Home() {
+  const [isClient, setIsClient] = useState(false);
+
+  // Core App State
+  const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_CURRENT_USER);
+  const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [coTravelers, setCoTravelers] = useState<{ user: UserProfile; trip: Trip }[]>([]);
+  const [corridorTravelers, setCorridorTravelers] = useState<{ user: UserProfile; trip: Trip }[]>([]);
+  const [loungeMessages, setLoungeMessages] = useState<LoungeMessage[]>([]);
+  const [connectRequests, setConnectRequests] = useState<ConnectRequest[]>([]);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
+
+  // Navigation tab
+  const [activeView, setActiveView] = useState<'passengers' | 'lounge'>('passengers');
+
+  // Modals state
+  const [tripModalOpen, setTripModalOpen] = useState(false);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [safetyModalOpen, setSafetyModalOpen] = useState(false);
+
+  // Selected targets for modal interactions
+  const [connectTargetUser, setConnectTargetUser] = useState<UserProfile | null>(null);
+  const [connectTargetTrip, setConnectTargetTrip] = useState<Trip | null>(null);
+  const [activeChatRequestId, setActiveChatRequestId] = useState<string | null>(null);
+
+  // Reload state from Store
+  const refreshState = useCallback(() => {
+    const user = StorageStore.getCurrentUser();
+    const trip = StorageStore.getCurrentTrip();
+    const users = StorageStore.getAllUsers();
+    setCurrentUser(user);
+    setCurrentTrip(trip);
+    setAllUsers(users);
+
+    if (trip) {
+      const travelers = StorageStore.getCoTravelers(
+        trip.trainNumber,
+        trip.travelDate,
+        user.id
+      );
+      setCoTravelers(travelers);
+
+      const corridors = StorageStore.getCorridorTravelers(
+        trip.fromCode,
+        trip.toCode,
+        trip.travelDate,
+        trip.trainNumber,
+        user.id
+      );
+      setCorridorTravelers(corridors);
+
+      const msgs = StorageStore.getLoungeMessages(trip.trainNumber, trip.travelDate);
+      setLoungeMessages(msgs);
+    }
+
+    const requests = StorageStore.getConnectRequests(user.id);
+    setConnectRequests(requests);
+
+    if (activeChatRequestId) {
+      const dms = StorageStore.getDirectMessages(activeChatRequestId);
+      setDirectMessages(dms);
+    }
+  }, [activeChatRequestId]);
+
+  // Initial client hydration
+  useEffect(() => {
+    setIsClient(true);
+    refreshState();
+
+    const handleStorageChange = () => {
+      refreshState();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('railmeet_storage_update', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('railmeet_storage_update', handleStorageChange);
+    };
+  }, [refreshState]);
+
+  // Refresh direct messages when chat request changes
+  useEffect(() => {
+    if (activeChatRequestId) {
+      const dms = StorageStore.getDirectMessages(activeChatRequestId);
+      setDirectMessages(dms);
+    }
+  }, [activeChatRequestId]);
+
+  // Handlers
+  const handleTripCreated = (trip: Trip) => {
+    StorageStore.setCurrentTrip(trip);
+    refreshState();
+  };
+
+  const handleOpenConnectModal = (user: UserProfile, trip: Trip) => {
+    setConnectTargetUser(user);
+    setConnectTargetTrip(trip);
+    setConnectModalOpen(true);
+  };
+
+  const handleSendConnectRequest = (data: {
+    toUserId: string;
+    icebreaker: string;
+    customMessage: string;
+    shareContactOnAccept: boolean;
+  }) => {
+    if (!currentTrip) return;
+    StorageStore.sendConnectRequest({
+      fromUserId: currentUser.id,
+      toUserId: data.toUserId,
+      trainNumber: currentTrip.trainNumber,
+      travelDate: currentTrip.travelDate,
+      icebreaker: data.icebreaker,
+      customMessage: data.customMessage,
+      shareContactOnAccept: data.shareContactOnAccept,
+    });
+    refreshState();
+  };
+
+  const handleAcceptRequest = (requestId: string) => {
+    StorageStore.updateConnectRequestStatus(requestId, 'accepted');
+    refreshState();
+  };
+
+  const handleDeclineRequest = (requestId: string) => {
+    StorageStore.updateConnectRequestStatus(requestId, 'declined');
+    refreshState();
+  };
+
+  const handleSendDirectMessage = (
+    requestId: string,
+    toUserId: string,
+    content: string
+  ) => {
+    StorageStore.sendDirectMessage(requestId, currentUser.id, toUserId, content);
+    refreshState();
+  };
+
+  const handleSendLoungeMessage = (content: string, tag: LoungeMessage['tag']) => {
+    if (!currentTrip) return;
+    StorageStore.addLoungeMessage({
+      trainNumber: currentTrip.trainNumber,
+      travelDate: currentTrip.travelDate,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderAvatar: currentUser.avatar,
+      senderHeadline: currentUser.headline,
+      senderCoach: currentTrip.coach,
+      tag,
+      content,
+    });
+    refreshState();
+  };
+
+  const handleUpdateProfile = (updated: UserProfile) => {
+    StorageStore.setCurrentUser(updated);
+    refreshState();
+  };
+
+  const handleSwitchPersona = (persona: UserProfile) => {
+    StorageStore.setCurrentUser(persona);
+    refreshState();
+  };
+
+  const handleResetData = () => {
+    if (confirm('Reset demo data to initial defaults?')) {
+      StorageStore.resetToDefaults();
+      refreshState();
+    }
+  };
+
+  if (!isClient || !currentTrip) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <Train className="w-6 h-6 text-blue-500 animate-spin" />
+          <span className="text-sm font-medium text-slate-300">Loading RailMeet...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate Metrics
+  const sameCoachCount = coTravelers.filter(
+    (item) => currentTrip.coach && item.trip.coach === currentTrip.coach
+  ).length;
+
+  const matchedInterestCount = coTravelers.filter((item) =>
+    item.user.interests.some((i) => currentUser.interests.includes(i))
+  ).length;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      {/* Top Navigation */}
+      <Navbar
+        currentTrip={currentTrip}
+        currentUser={currentUser}
+        connectRequests={connectRequests}
+        onOpenTripModal={() => setTripModalOpen(true)}
+        onOpenInbox={() => setInboxOpen(true)}
+        onOpenProfile={() => setProfileModalOpen(true)}
+        onResetData={handleResetData}
+      />
+
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Active Journey Hero Card */}
+        <TripHero
+          trip={currentTrip}
+          coTravelersCount={coTravelers.length}
+          sameCoachCount={sameCoachCount}
+          matchedInterestCount={matchedInterestCount}
+          currentUser={currentUser}
+          onChangeTrip={() => setTripModalOpen(true)}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+
+        {/* View Switcher Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveView('passengers')}
+              className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition flex items-center gap-2 ${
+                activeView === 'passengers'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+              }`}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              <Users className="w-4 h-4" />
+              <span>Co-Travelers ({coTravelers.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('lounge')}
+              className={`px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition flex items-center gap-2 ${
+                activeView === 'lounge'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+              }`}
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+              <MessageSquare className="w-4 h-4" />
+              <span>Train Lounge Live Chat</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
+          </div>
+
+          <button
+            onClick={() => setSafetyModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-400 transition"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Passenger Safety & 139 Guide</span>
+          </button>
         </div>
+
+        {/* View Content */}
+        {activeView === 'passengers' ? (
+          <CoTravelersList
+            coTravelers={coTravelers}
+            corridorTravelers={corridorTravelers}
+            currentTrip={currentTrip}
+            currentUser={currentUser}
+            connectRequests={connectRequests}
+            onOpenConnectModal={handleOpenConnectModal}
+            onOpenChat={(reqId) => {
+              setActiveChatRequestId(reqId);
+              setInboxOpen(true);
+            }}
+          />
+        ) : (
+          <TrainLounge
+            messages={loungeMessages}
+            currentTrip={currentTrip}
+            currentUser={currentUser}
+            onSendMessage={handleSendLoungeMessage}
+          />
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="mt-12 border-t border-slate-800/80 bg-slate-950 py-8 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-300">RailMeet India</span>
+            <span>•</span>
+            <span>Privacy-first co-traveler networking for Indian Railways</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              IRCTC PNR Safe Mode
+            </span>
+            <button
+              onClick={() => setSafetyModalOpen(true)}
+              className="hover:text-slate-300 transition"
+            >
+              Helpline 139
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      {/* Modals & Drawers */}
+      <TripEntryModal
+        isOpen={tripModalOpen}
+        onClose={() => setTripModalOpen(false)}
+        onTripCreated={handleTripCreated}
+        userId={currentUser.id}
+      />
+
+      <ConnectModal
+        isOpen={connectModalOpen}
+        onClose={() => setConnectModalOpen(false)}
+        targetUser={connectTargetUser}
+        targetTrip={connectTargetTrip}
+        currentTrip={currentTrip}
+        onSendRequest={handleSendConnectRequest}
+      />
+
+      <InboxDrawer
+        isOpen={inboxOpen}
+        onClose={() => {
+          setInboxOpen(false);
+          setActiveChatRequestId(null);
+        }}
+        currentUser={currentUser}
+        connectRequests={connectRequests}
+        allUsers={allUsers}
+        directMessages={directMessages}
+        activeChatRequestId={activeChatRequestId}
+        onSelectChat={(id) => setActiveChatRequestId(id)}
+        onAcceptRequest={handleAcceptRequest}
+        onDeclineRequest={handleDeclineRequest}
+        onSendDirectMessage={handleSendDirectMessage}
+      />
+
+      <ProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        currentUser={currentUser}
+        onUpdateProfile={handleUpdateProfile}
+        onSwitchPersona={handleSwitchPersona}
+      />
+
+      <SafetyGuidelinesModal
+        isOpen={safetyModalOpen}
+        onClose={() => setSafetyModalOpen(false)}
+      />
     </div>
   );
 }

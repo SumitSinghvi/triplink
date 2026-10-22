@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RailMeet - Indian Railways Co-Traveler & Networking Web App
+
+> Connect with co-travelers on the same train & same date based on shared interests (Tech, Startups, Business, UPSC, Chai, Travel).
+
+Built with **Next.js (App Router)** + **TypeScript** + **Tailwind CSS** + **Lucide Icons**.
+
+---
+
+## Key Features
+
+1. **PNR & Journey Matching:**
+   - **10-Digit PNR Verification & Simulator:** Automatically decodes train number, travel date, origin, destination, and coach.
+   - **Zero Privacy Leakage:** Raw PNR is never exposed to public APIs or co-passengers. Only masked format (`28******51`) and coach details are visible.
+   - **Manual Journey Entry Fallback:** Passengers can pick any train and date if PNR lookup is unavailable.
+
+2. **Interest-Based Co-Traveler Discovery:**
+   - Filter co-passengers by domain: *Tech & AI*, *Startups & Business*, *Finance*, *UPSC/Govt*, *Casual & Chai*, *Books & Ideas*, *Travel & Photography*.
+   - **Same-Coach Filter:** Highlights and filters passengers sitting in your coach (e.g. `B4`).
+   - **Women-Only Travel Filter:** Provides safe, dedicated discovery for female travelers.
+   - **Corridor Match Engine:** Solves the cold-start problem by displaying travelers taking the same route across alternative trains today.
+
+3. **Train Lounge (Live Chat for Train & Date):**
+   - Real-time discussion board restricted to passengers on that exact train and travel date.
+   - Channel tags: `#All`, `#ChaiMeet`, `#Networking`, `#Food`, `#SeatSwap`.
+
+4. **1-on-1 Connect & Direct Messaging:**
+   - Send invites with Indian Railway icebreakers (*"Chai meetup around next junction"*, *"Quiet co-working buddy"*, *"Seat swap discussion"*).
+   - Once accepted, passengers can directly chat 1-on-1 and opt-in to reveal their WhatsApp or LinkedIn details.
+
+5. **Safety & Railway Guidelines:**
+   - Indian Railway helpline **139** integration guide.
+   - Safety instructions for meeting in public coach vestibules.
+
+---
 
 ## Getting Started
 
-First, run the development server:
-
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Run Development Server
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Production Build
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 1-Click Demo Testing
+When opening the app, you can:
+- Click **"Add PNR / Trip"** in top bar.
+- Choose any 1-click test PNR chip (*Tejas Rajdhani NDLS-MMCT*, *Vande Bharat NDLS-BSB*, *Shatabdi SBC-MAS*).
+- Use the **Demo Persona Switcher** inside the Profile modal to switch between passenger perspectives (*Aarav the Dev*, *Priya the PM*, *Vikram the Investor*, *Ananya the UPSC aspirant*).
