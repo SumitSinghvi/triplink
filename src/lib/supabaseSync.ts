@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { MatchProfile, TripData, UserProfileData } from '@/store/initialData';
-import { normalizeTravelDate } from './travelDate';
+import { normalizeTravelDate, todayIso } from './travelDate';
 
 export interface SupabaseProfileRow {
   id: string;
@@ -58,6 +58,12 @@ export function extractJourneyKey(name: string): string {
 // null means unknown -> skip matching rather than silently assume today.
 export function tripTravelDate(trip: TripData): string | null {
   return trip.travelDate || normalizeTravelDate(trip.when);
+}
+
+// Travel date strictly before today. Unknown dates are treated as not past.
+export function isPastTrip(trip: TripData): boolean {
+  const d = tripTravelDate(trip);
+  return !!d && d < todayIso();
 }
 
 // Identity of a journey for dedupe: same vehicle on same day.
@@ -159,30 +165,24 @@ export async function fetchUserTrips(userId: string): Promise<TripData[]> {
   }
 }
 
-// Helper to check coach proximity
+// Helper to check coach proximity (used for fit score only; coach is never shown to others)
 export function calculateCoachProximity(userCoach?: string, otherCoach?: string): {
   isSameCoach: boolean;
   isAdjacentCoach: boolean;
-  coachLabel?: string;
 } {
-  if (!userCoach || !otherCoach) {
-    return { isSameCoach: false, isAdjacentCoach: false, coachLabel: otherCoach ? `Coach ${otherCoach}` : undefined };
-  }
+  const none = { isSameCoach: false, isAdjacentCoach: false };
+  if (!userCoach || !otherCoach) return none;
   const u = userCoach.trim().toUpperCase();
   const o = otherCoach.trim().toUpperCase();
-  if (u === o) {
-    return { isSameCoach: true, isAdjacentCoach: false, coachLabel: `Same Coach (${o})` };
-  }
+  if (u === o) return { isSameCoach: true, isAdjacentCoach: false };
   const uMatch = u.match(/^([A-Z]+)(\d+)$/);
   const oMatch = o.match(/^([A-Z]+)(\d+)$/);
   if (uMatch && oMatch && uMatch[1] === oMatch[1]) {
-    const uNum = parseInt(uMatch[2], 10);
-    const oNum = parseInt(oMatch[2], 10);
-    if (Math.abs(uNum - oNum) === 1) {
-      return { isSameCoach: false, isAdjacentCoach: true, coachLabel: `Adjacent Coach (${o})` };
+    if (Math.abs(parseInt(uMatch[2], 10) - parseInt(oMatch[2], 10)) === 1) {
+      return { isSameCoach: false, isAdjacentCoach: true };
     }
   }
-  return { isSameCoach: false, isAdjacentCoach: false, coachLabel: `Coach ${o}` };
+  return none;
 }
 
 // 3. Find Co-Travelers on Same Train / Flight & Date
@@ -235,7 +235,16 @@ export async function fetchLiveCoTravelers(
       return [];
     }
 
-    const userIds = matchingTrips.map((t) => t.user_id).filter(Boolean);
+    // One entry per person (corridor can return several rows per user); drop blocked either way.
+    const blocked = await fetchBlockedIds(currentUserId);
+    const seenUsers = new Set<string>();
+    matchingTrips = matchingTrips.filter((t) => {
+      if (!t.user_id || blocked.has(t.user_id) || seenUsers.has(t.user_id)) return false;
+      seenUsers.add(t.user_id);
+      return true;
+    });
+
+    const userIds = matchingTrips.map((t) => t.user_id);
     if (userIds.length === 0) return [];
 
     // Query matching profiles
@@ -286,8 +295,6 @@ export async function fetchLiveCoTravelers(
 
       const statusLine = isCorridorMatch
         ? `${p.company || 'Traveler'} • Same Route Corridor (${t.train_name || t.train_number})`
-        : proximity.isSameCoach
-        ? `${p.company || 'Traveler'} • Sitting in your coach ${t.coach}`
         : p.company
         ? `${p.company} • Traveling on ${trip.name}`
         : undefined;
@@ -304,7 +311,6 @@ export async function fetchLiveCoTravelers(
         line: statusLine,
         tags: p.industry ? [p.industry] : ['Traveler'],
         verified: p.is_verified || false,
-        coach: proximity.coachLabel || (t.coach ? `Coach ${t.coach}` : undefined),
         cities: p.cities || undefined,
         lookingFor: p.intent ? [p.intent] : ['Partner'],
       };
@@ -445,10 +451,12 @@ export async function fetchUserRequestsAndMatches(userId: string): Promise<{
     const reqStatus: Record<string, 'sent' | 'accepted' | 'declined'> = {};
     const pendingIncomingRows: typeof data = [];
     const acceptedIds = new Set<string>();
+    const blocked = await fetchBlockedIds(userId);
 
     for (const row of data) {
       const outgoing = row.requester_id === userId;
       const otherId: string = outgoing ? row.receiver_id : row.requester_id;
+      if (blocked.has(otherId)) continue;
       const matchKey = `match_${otherId}`;
       // A pair can have rows on several trips; accepted on any row wins.
       if (row.status === 'accepted') {
@@ -537,11 +545,16 @@ async function resolveConnectionRowIds(chatKey: string, myId: string): Promise<s
   return data.map((r) => r.id);
 }
 
+export function newMessageId(): string {
+  return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+}
+
 export async function sendChatMessageToSupabase(
   chatKey: string,
   senderId: string,
   text: string,
-  isCard = false
+  isCard = false,
+  msgId = newMessageId()
 ): Promise<boolean> {
   try {
     // A pair can share several trips (rows). Write to the stable first accepted row;
@@ -549,7 +562,6 @@ export async function sendChatMessageToSupabase(
     const [matchId] = await resolveConnectionRowIds(chatKey, senderId);
     if (!matchId) return false;
 
-    const msgId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const { error } = await supabase.from('messages').insert({
       id: msgId,
       match_id: matchId,
@@ -566,7 +578,7 @@ export async function sendChatMessageToSupabase(
 export async function fetchLiveChatMessages(
   chatKey: string,
   currentUserId: string
-): Promise<{ from: 'me' | 'them'; text: string; card?: boolean; timestamp?: string }[]> {
+): Promise<{ id: string; from: 'me' | 'them'; text: string; card?: boolean; timestamp?: string }[]> {
   try {
     const matchIds = await resolveConnectionRowIds(chatKey, currentUserId);
     if (matchIds.length === 0) return [];
@@ -580,6 +592,7 @@ export async function fetchLiveChatMessages(
     if (error || !data) return [];
 
     return data.map((m) => ({
+      id: m.id,
       from: m.sender_id === currentUserId ? 'me' : 'them',
       text: m.text,
       card: m.is_card || false,
@@ -594,9 +607,25 @@ export async function fetchLiveChatMessages(
 export async function deleteUserAccount(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
-    await supabase.from('trips').delete().eq('user_id', userId);
-    await supabase.from('profiles').delete().eq('id', userId);
-    await supabase.from('matches').delete().or(`requester_id.eq.${userId},receiver_id.eq.${userId}`);
+    // Children before parents; stop at the first failure so the caller can retry.
+    // Reports are kept for moderation.
+    const mine = `requester_id.eq.${userId},receiver_id.eq.${userId}`;
+    const { data: rows, error: rowsErr } = await supabase.from('matches').select('id').or(mine);
+    if (rowsErr) throw rowsErr;
+    const rowIds = (rows || []).map((r) => r.id);
+
+    const steps = [
+      () => (rowIds.length ? supabase.from('messages').delete().in('match_id', rowIds) : null),
+      () => supabase.from('messages').delete().eq('sender_id', userId),
+      () => supabase.from('matches').delete().or(mine),
+      () => supabase.from('blocks').delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
+      () => supabase.from('trips').delete().eq('user_id', userId),
+      () => supabase.from('profiles').delete().eq('id', userId),
+    ];
+    for (const step of steps) {
+      const res = await step();
+      if (res?.error) throw res.error;
+    }
     return true;
   } catch (err) {
     console.warn('deleteUserAccount exception:', err);
@@ -605,15 +634,34 @@ export async function deleteUserAccount(userId: string): Promise<boolean> {
 }
 
 // 9. Block User
+// Users I blocked or who blocked me. Blocking hides people in both directions.
+export async function fetchBlockedIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('blocks')
+    .select('blocker_id, blocked_id')
+    .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+  if (error || !data) return new Set();
+  return new Set(data.map((b) => (b.blocker_id === userId ? b.blocked_id : b.blocker_id)));
+}
+
 export async function blockUserInSupabase(blockerId: string, blockedId: string): Promise<boolean> {
   if (!blockerId || !blockedId) return false;
   try {
     const id = `blk_${blockerId}_${blockedId}`;
-    await supabase.from('blocks').upsert({
+    const { error } = await supabase.from('blocks').upsert({
       id,
       blocker_id: blockerId,
       blocked_id: blockedId,
     });
+    if (error) {
+      console.warn('blockUserInSupabase warning:', error.message);
+      return false;
+    }
+    // Close every connection between the pair so neither side can keep chatting.
+    await supabase
+      .from('matches')
+      .update({ status: 'declined' })
+      .or(`and(requester_id.eq.${blockerId},receiver_id.eq.${blockedId}),and(requester_id.eq.${blockedId},receiver_id.eq.${blockerId})`);
     return true;
   } catch (err) {
     console.warn('blockUserInSupabase exception:', err);

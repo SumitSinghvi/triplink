@@ -18,11 +18,23 @@ export default function Home() {
   const tab = useAppStore((s) => s.tab);
   const userId = useAppStore((s) => s.userId);
   const syncUserRequests = useAppStore((s) => s.syncUserRequests);
+  const syncChatMessages = useAppStore((s) => s.syncChatMessages);
 
-  // Load connections/contacts on entry so Chats works without visiting Matches first.
+  // App-wide polling: connections/requests, plus background chats for unread badges.
+  // The open chat polls itself faster in ActiveChatView.
   useEffect(() => {
-    if (screen === 'main') syncUserRequests().catch(() => {});
-  }, [screen, userId, syncUserRequests]);
+    if (screen !== 'main') return;
+    const tick = () => {
+      syncUserRequests().catch(() => {});
+      const { req, activeChatId } = useAppStore.getState();
+      for (const [id, status] of Object.entries(req)) {
+        if (status === 'accepted' && id !== activeChatId) syncChatMessages(id).catch(() => {});
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 20000);
+    return () => clearInterval(interval);
+  }, [screen, userId, syncUserRequests, syncChatMessages]);
 
   return (
     <main className="x-stage">

@@ -5,6 +5,9 @@ interface OtpEntry {
   expiresAt: number;
 }
 
+// Demo code 1234 works only outside production builds (local dev / previews).
+export const DEMO_OTP_ALLOWED = process.env.NODE_ENV !== 'production';
+
 // In-memory fallback
 const fallbackOtpStore = new Map<string, OtpEntry>();
 
@@ -42,12 +45,12 @@ export async function verifyOtp(
   const clean = phone.replace(/\D/g, '').slice(-10);
   const cleanInput = inputOtp.trim();
 
-  // Master demo bypass code for testing/development
-  if (cleanInput === '1234') {
+  if (DEMO_OTP_ALLOWED && cleanInput === '1234') {
     return { valid: true };
   }
 
-  // 1. Try Supabase persistent OTP store
+  // 1. Try Supabase persistent OTP store. If Supabase answers, it is authoritative
+  //    (no fallback that would skip its expiry/attempt limits).
   try {
     const { data, error } = await supabase
       .from('auth_otps')
@@ -55,6 +58,9 @@ export async function verifyOtp(
       .eq('phone', clean)
       .maybeSingle();
 
+    if (!error && !data) {
+      return { valid: false, reason: 'OTP expired or not requested' };
+    }
     if (!error && data) {
       const now = Date.now();
       const expiresAt = new Date(data.expires_at).getTime();

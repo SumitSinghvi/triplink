@@ -3,6 +3,8 @@
 import React, { useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
+import { extractJourneyKey, isPastTrip, tripTravelDate } from '@/lib/supabaseSync';
+import type { IncomingRequestItem } from '@/store/useAppStore';
 
 const FILTERS = ['All', 'Business', 'Social', 'Same industry'] as const;
 
@@ -30,6 +32,8 @@ export const MatchesTab: React.FC = () => {
 
   const selectedTrip = trips.find((t) => t.id === selTripId) || trips[0];
   const tripId = selectedTrip?.id;
+  // Past trips: load once, don't keep polling for co-travellers.
+  const tripIsPast = selectedTrip ? isPastTrip(selectedTrip) : false;
 
   useEffect(() => {
     if (tripId) {
@@ -37,13 +41,12 @@ export const MatchesTab: React.FC = () => {
     }
     syncUserRequests().catch(() => {});
 
-    // Poll every 15s instead of Realtime WebSocket (avoids page hang)
+    // Poll co-travellers every 15s (requests are polled app-wide in page.tsx).
     const interval = setInterval(() => {
-      if (tripId) refreshLiveMatches(tripId).catch(() => {});
-      syncUserRequests().catch(() => {});
+      if (tripId && !tripIsPast) refreshLiveMatches(tripId).catch(() => {});
     }, 15000);
     return () => clearInterval(interval);
-  }, [tripId, refreshLiveMatches, syncUserRequests]);
+  }, [tripId, tripIsPast, refreshLiveMatches, syncUserRequests]);
 
   if (!selectedTrip) {
     return (
@@ -72,6 +75,17 @@ export const MatchesTab: React.FC = () => {
   }
 
   const all = matches.filter((m) => m.tripId === selectedTrip.id && !gone[m.id]);
+
+  // Requests are tied to a journey: show this trip's first, the rest under "Other trips".
+  const selKey = extractJourneyKey(selectedTrip.name);
+  const selDate = tripTravelDate(selectedTrip);
+  const isForSelected = (r: IncomingRequestItem) => r.trainNumber === selKey && r.travelDate === selDate;
+  const tripRequests = incomingRequests.filter(isForSelected);
+  const otherRequests = incomingRequests.filter((r) => !isForSelected(r));
+  const requestGroups = [
+    { title: 'Incoming Requests', items: tripRequests },
+    { title: 'Requests on your other trips', items: otherRequests },
+  ].filter((g) => g.items.length > 0);
   const list = all.filter((m) => {
     if (filter === 'All') return true;
     if (filter === 'Same industry') return m.industry.toLowerCase() === profile.industry.toLowerCase();
@@ -122,12 +136,12 @@ export const MatchesTab: React.FC = () => {
           </span>
         </p>
 
-        {incomingRequests.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
+        {requestGroups.map((group) => (
+          <div key={group.title} style={{ marginBottom: '16px' }}>
             <p className="x-sub" style={{ fontWeight: 600, color: 'var(--accent, #6366f1)', marginBottom: '8px' }}>
-              Incoming Requests ({incomingRequests.length})
+              {group.title} ({group.items.length})
             </p>
-            {incomingRequests.map((reqItem) => (
+            {group.items.map((reqItem) => (
               <div key={reqItem.id} className="x-card" style={{ borderColor: 'var(--accent, #6366f1)' }}>
                 <div className="x-m__top">
                   <span className="x-av">{reqItem.ini}</span>
@@ -161,7 +175,7 @@ export const MatchesTab: React.FC = () => {
               </div>
             ))}
           </div>
-        )}
+        ))}
 
         {list.length > 0 ? (
           list.map((m) => {
@@ -204,7 +218,7 @@ export const MatchesTab: React.FC = () => {
                     {m.verified && (
                       <span className="x-ver">
                         <SvgIcon name="seal" size={16} width={0} />
-                        Verified
+                        GSTIN
                       </span>
                     )}
                   </span>

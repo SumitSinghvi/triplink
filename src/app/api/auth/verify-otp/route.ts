@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, error: result.reason || 'Invalid OTP code. Try demo code 1234.' },
+      { success: false, error: result.reason || 'Invalid OTP code.' },
       { status: 400 }
     );
   } catch (err: unknown) {

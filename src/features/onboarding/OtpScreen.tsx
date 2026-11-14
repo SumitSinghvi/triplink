@@ -10,7 +10,7 @@ export const OtpScreen: React.FC = () => {
   const showToast = useAppStore((s) => s.showToast);
   const loginUser = useAppStore((s) => s.loginUser);
 
-  const [digits, setDigits] = useState<string[]>(['1', '2', '3', '4']);
+  const [digits, setDigits] = useState<string[]>(['', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
 
@@ -65,10 +65,10 @@ export const OtpScreen: React.FC = () => {
           setScreen('mode');
         }
       } else {
-        showToast(data?.error || 'Incorrect OTP. Try demo code 1234.');
+        showToast(data?.error || 'Incorrect OTP.');
       }
     } catch {
-      showToast('Verification failed. Try demo code 1234.');
+      showToast('Verification failed. Check your connection.');
     } finally {
       setLoading(false);
     }
@@ -195,16 +195,18 @@ export const OtpScreen: React.FC = () => {
           >
             {resending ? 'Sending...' : 'Resend code'}
           </button>
-          <button
-            type="button"
-            className="x-btn x-btn--sm x-btn--ghost"
-            onClick={() => {
-              setDigits(['1', '2', '3', '4']);
-              showToast('Demo OTP 1234 filled');
-            }}
-          >
-            Demo code (1234)
-          </button>
+          {process.env.NODE_ENV !== 'production' && (
+            <button
+              type="button"
+              className="x-btn x-btn--sm x-btn--ghost"
+              onClick={() => {
+                setDigits(['1', '2', '3', '4']);
+                showToast('Demo OTP 1234 filled');
+              }}
+            >
+              Demo code (1234)
+            </button>
+          )}
         </div>
       </div>
 

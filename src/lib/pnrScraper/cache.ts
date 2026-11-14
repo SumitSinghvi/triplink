@@ -8,8 +8,9 @@ interface CacheEntry {
 
 const pnrCache = new Map<string, CacheEntry>();
 
-// 24-hour TTL in milliseconds
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// Short TTL: berth/status can change until the chart is prepared.
+// ponytail: in-memory per server instance; move to Supabase/KV if lookups get rate-limited.
+const CACHE_TTL_MS = 15 * 60 * 1000;
 
 export const PnrCache = {
   get(pnr: string): { data: DecodedPNRResult; source: string } | null {
@@ -30,6 +31,8 @@ export const PnrCache = {
   },
 
   set(pnr: string, data: DecodedPNRResult, source: string = 'live'): void {
+    // Waitlist/RAC or pre-chart tickets still change; always fetch fresh.
+    if (data.status !== 'CONFIRMED' || !data.chartPrepared) return;
     pnrCache.set(pnr, {
       data,
       source,

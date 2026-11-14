@@ -52,7 +52,10 @@ export interface MatchProfile {
 }
 
 export interface ChatMessage {
+  id?: string;
   from: 'me' | 'them' | 'sys';
+  /** Local-only delivery state; absent once the server has the message. */
+  status?: 'pending' | 'failed';
   text?: string;
   card?: boolean;
   timestamp?: string;
@@ -103,16 +106,4 @@ export interface IncomingRequestItem {
   fit: number;
   trainNumber: string;
   travelDate: string;
-}
-
-export interface TrainInfo {
-  number: string;
-  name: string;
-  fromStation: string;
-  fromCode: string;
-  toStation: string;
-  toCode: string;
-  departureTime: string;
-  arrivalTime: string;
-  duration: string;
 }

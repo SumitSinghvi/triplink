@@ -46,10 +46,10 @@ export const ProfileTab: React.FC = () => {
               <small>{subtitle}</small>
               {profile.verified ? (
                 <span className="x-ver">
-                  <SvgIcon name="seal" size={16} width={0} /> Verified business
+                  <SvgIcon name="seal" size={16} width={0} /> GSTIN added
                 </span>
               ) : (
-                <small style={{ color: 'var(--text-secondary,#6b7280)' }}>Not verified yet</small>
+                <small style={{ color: 'var(--text-secondary,#6b7280)' }}>No GSTIN added</small>
               )}
             </span>
           </div>

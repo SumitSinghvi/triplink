@@ -28,7 +28,24 @@ import {
   reportUserInSupabase,
   fetchUserTrips,
   tripKey,
+  newMessageId,
 } from '@/lib/supabaseSync';
+import { mergeChat, countNewIncoming } from '@/lib/chatMerge';
+
+// Clears or flags a local message's delivery status after the send settles.
+function withDelivery(
+  chats: Record<string, ChatMessage[]>,
+  chatId: string,
+  msgId: string,
+  ok: boolean
+): Record<string, ChatMessage[]> {
+  const list = chats[chatId];
+  if (!list) return chats;
+  return {
+    ...chats,
+    [chatId]: list.map((m) => (m.id === msgId ? { ...m, status: ok ? undefined : 'failed' } : m)),
+  };
+}
 
 export type {
   TripData,
@@ -62,7 +79,6 @@ function blankUserData() {
     gone: {},
     chats: {},
     unread: {},
-    typing: null,
     add: null,
     activeChatId: null,
     sheet: null,
@@ -111,13 +127,12 @@ export interface AppState {
   gone: Record<string, boolean>;
   chats: Record<string, ChatMessage[]>;
   unread: Record<string, boolean>;
-  typing: string | null;
 
   // Add Trip Flow
   add: AddTripModalState | null;
 
   // Toast
-  toastMessage: { text: string; actionLabel?: string; onAction?: () => void } | null;
+  toastMessage: { id: number; text: string; actionLabel?: string; onAction?: () => void } | null;
 
   // Actions
   setUserId: (userId: string) => void;
@@ -164,7 +179,7 @@ export interface AppState {
   clearToast: () => void;
   togglePro: () => void;
   logout: () => void;
-  resetAll: () => void;
+  resetAll: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>()(
@@ -192,7 +207,6 @@ export const useAppStore = create<AppState>()(
       gone: {},
       chats: INITIAL_CHATS,
       unread: {},
-      typing: null,
 
       add: null,
       toastMessage: null,
@@ -240,7 +254,11 @@ export const useAppStore = create<AppState>()(
         })),
       updateProfileField: (k, v) =>
         set((state) => ({
-          profile: { ...state.profile, [k]: v },
+          // Changing the GSTIN invalidates the previous format check.
+          profile:
+            k === 'gstin' && v !== state.profile.gstin
+              ? { ...state.profile, gstin: v as string, verified: false, gstErr: '' }
+              : { ...state.profile, [k]: v },
         })),
       verifyGstin: () => {
         const { gstin } = get().profile;
@@ -249,7 +267,7 @@ export const useAppStore = create<AppState>()(
           set((state) => ({
             profile: { ...state.profile, gstin: clean, verified: true, gstErr: '' },
           }));
-          get().showToast('GSTIN Verified Successfully');
+          get().showToast('GSTIN format is valid');
         } else {
           set((state) => ({
             profile: {
@@ -331,8 +349,8 @@ export const useAppStore = create<AppState>()(
         });
       },
       selectTrip: (id) => {
+        // MatchesTab fetches on mount / trip change, so no fetch here.
         set({ selTripId: id, tab: 'matches', filter: 'All' });
-        get().refreshLiveMatches(id);
       },
       refreshLiveMatches: async (tripId) => {
         const targetId = tripId || get().selTripId;
@@ -389,12 +407,7 @@ export const useAppStore = create<AppState>()(
                   fit: reqItem.fit,
                 },
               ],
-          chats: {
-            ...state.chats,
-            [matchKey]: [
-              { from: 'sys', text: `You and ${reqItem.name} are now connected.` },
-            ],
-          },
+          chats: state.chats[matchKey] ? state.chats : { ...state.chats, [matchKey]: [] },
         }));
         get().showToast(`Connected with ${reqItem.name}!`, 'Chat', () => {
           get().openChat(matchKey);
@@ -496,14 +509,20 @@ export const useAppStore = create<AppState>()(
       syncChatMessages: async (matchId) => {
         const { userId } = get();
         const liveMsgs = await fetchLiveChatMessages(matchId, userId);
-        if (liveMsgs.length > 0) {
-          set((state) => ({
-            chats: {
-              ...state.chats,
-              [matchId]: liveMsgs,
-            },
-          }));
-        }
+        // Empty = no history or fetch error: keep local rather than wipe it.
+        if (liveMsgs.length === 0 || get().userId !== userId) return;
+        set((state) => {
+          if (state.gone[matchId]) return {};
+          const local = state.chats[matchId] || [];
+          const hasNew = countNewIncoming(local, liveMsgs) > 0;
+          return {
+            chats: { ...state.chats, [matchId]: mergeChat(liveMsgs, local) },
+            unread:
+              hasNew && state.activeChatId !== matchId
+                ? { ...state.unread, [matchId]: true }
+                : state.unread,
+          };
+        });
       },
       sendMessage: (text) => {
         const id = get().activeChatId;
@@ -511,18 +530,20 @@ export const useAppStore = create<AppState>()(
 
         const clean = text.trim();
         const { userId } = get();
+        const msgId = newMessageId();
 
         set((state) => {
           const current = state.chats[id] || [];
           return {
             chats: {
               ...state.chats,
-              [id]: [...current, { from: 'me', text: clean, timestamp: 'Now' }],
+              [id]: [...current, { id: msgId, from: 'me', text: clean, timestamp: 'Now', status: 'pending' }],
             },
           };
         });
 
-        sendChatMessageToSupabase(id, userId, clean).then((ok) => {
+        sendChatMessageToSupabase(id, userId, clean, false, msgId).then((ok) => {
+          set((state) => ({ chats: withDelivery(state.chats, id, msgId, ok) }));
           if (!ok) get().showToast('Message not delivered. Check connection.');
         });
       },
@@ -530,36 +551,37 @@ export const useAppStore = create<AppState>()(
         const id = get().activeChatId;
         if (!id) return;
         const { userId } = get();
+        const msgId = newMessageId();
         set((state) => {
           const current = state.chats[id] || [];
           return {
             chats: {
               ...state.chats,
-              [id]: [...current, { from: 'me', card: true, timestamp: 'Now' }],
+              [id]: [...current, { id: msgId, from: 'me', card: true, timestamp: 'Now', status: 'pending' }],
             },
           };
         });
-        sendChatMessageToSupabase(id, userId, 'Shared business card', true).then((ok) => {
+        sendChatMessageToSupabase(id, userId, 'Shared business card', true, msgId).then((ok) => {
+          set((state) => ({ chats: withDelivery(state.chats, id, msgId, ok) }));
           if (!ok) get().showToast('Business card not delivered. Check connection.');
         });
         get().showToast('Business Card Shared');
       },
 
       showToast: (text, actionLabel, onAction) => {
-        set({ toastMessage: { text, actionLabel, onAction } });
+        const id = Date.now() + Math.random();
+        set({ toastMessage: { id, text, actionLabel, onAction } });
         setTimeout(() => {
-          if (get().toastMessage?.text === text) {
-            set({ toastMessage: null });
-          }
+          // Only clear this toast, not a newer one (even with the same text).
+          if (get().toastMessage?.id === id) set({ toastMessage: null });
         }, actionLabel ? 4500 : 2800);
       },
       clearToast: () => set({ toastMessage: null }),
-      togglePro: () =>
-        set((state) => {
-          const next = !state.pro;
-          get().showToast(next ? 'TripLink Pro Active' : 'TripLink Pro Canceled');
-          return { pro: next };
-        }),
+      togglePro: () => {
+        const next = !get().pro;
+        set({ pro: next });
+        get().showToast(next ? 'TripLink Pro Active' : 'TripLink Pro Canceled');
+      },
       // Clears this device only. Server data stays so the user can log back in.
       logout: () => {
         set({
@@ -575,10 +597,14 @@ export const useAppStore = create<AppState>()(
         get().showToast('Logged out');
       },
       // Permanently deletes the account server-side, then logs out.
-      resetAll: () => {
+      resetAll: async () => {
         const currentUid = get().userId;
         if (currentUid && !currentUid.startsWith('user_client') && !currentUid.startsWith('user_server')) {
-          deleteUserAccount(currentUid).catch(() => {});
+          // Keep the user signed in if deletion fails, so they can retry.
+          if (!(await deleteUserAccount(currentUid))) {
+            get().showToast('Could not delete account. Try again.');
+            return;
+          }
         }
         get().logout();
         get().showToast('Account deleted');

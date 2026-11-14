@@ -34,8 +34,8 @@ export const SafetySheet: React.FC = () => {
             </div>
             <div className="x-li">
               <span className="x-li__main">
-                <b>Verified identities</b>
-                <small>Look for the Verified badge for GST-registered profiles.</small>
+                <b>GST-registered profiles</b>
+                <small>The GSTIN badge means a valid-format GSTIN was added. It is not checked with the GST portal.</small>
               </span>
             </div>
             <div className="x-li">

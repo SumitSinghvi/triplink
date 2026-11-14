@@ -161,20 +161,6 @@ export const AddTripSheet: React.FC = () => {
                 />
               </label>
 
-              <label className="x-li">
-                <span className="x-li__main">
-                  Women-only visibility
-                  <small>Social matches only</small>
-                </span>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  className="x-switch"
-                  disabled={!add.vis.social}
-                  checked={add.vis.women && add.vis.social}
-                  onChange={(e) => updateAddTrip({ vis: { ...add.vis, women: e.target.checked } })}
-                />
-              </label>
 
               <label className="x-li">
                 <span className="x-li__main">Show me 2 hours before departure only</span>

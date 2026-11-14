@@ -1,3 +1,5 @@
+import { normalizeTravelDate, todayIso } from '@/lib/travelDate';
+
 export interface VerifiedFlight {
   airlineCode: string;
   airlineName: string;
@@ -111,55 +113,60 @@ export async function verifyFlightWaterfall(
     };
   }
 
-  const date = travelDate || new Date().toISOString().split('T')[0];
+  const date = normalizeTravelDate(travelDate) || todayIso();
   const airlineName = CARRIERS[parsed.code] || `Airline (${parsed.code})`;
   const formattedFlight = `${parsed.code} ${parsed.num}`;
 
-  // 1. Try public real-time flight radar API (AeroDataBox / FlightRadar)
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+  // 1. Live lookup only when a real key is configured (AVIATIONSTACK_API_KEY, paid plan for flight_date).
+  const apiKey = process.env.AVIATIONSTACK_API_KEY;
+  if (apiKey) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const url =
+        `https://api.aviationstack.com/v1/flights?access_key=${encodeURIComponent(apiKey)}` +
+        `&flight_iata=${parsed.code}${parsed.num}&flight_date=${date}`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
 
-    const res = await fetch(
-      `https://api.aviationstack.com/v1/flights?access_key=public_demo&flight_iata=${parsed.code}${parsed.num}`,
-      { signal: controller.signal }
-    );
-    clearTimeout(timeoutId);
+      if (res.ok) {
+        const json = await res.json();
+        const item = json?.data?.[0];
+        const depIata: string | undefined = item?.departure?.iata;
+        const arrIata: string | undefined = item?.arrival?.iata;
+        if (depIata && arrIata) {
+          const fromInfo = AIRPORTS[depIata] || { city: item.departure?.airport || depIata, name: depIata };
+          const toInfo = AIRPORTS[arrIata] || { city: item.arrival?.airport || arrIata, name: arrIata };
+          const dep: string | undefined = item.departure?.scheduled;
+          const arr: string | undefined = item.arrival?.scheduled;
+          const mins = dep && arr ? Math.round((Date.parse(arr) - Date.parse(dep)) / 60000) : NaN;
 
-    if (res.ok) {
-      const json = await res.json();
-      if (json && json.data && json.data.length > 0) {
-        const item = json.data[0];
-        const depIata = item.departure?.iata || 'AMD';
-        const arrIata = item.arrival?.iata || 'BOM';
-        const fromInfo = AIRPORTS[depIata] || { city: item.departure?.airport || 'Origin', name: depIata };
-        const toInfo = AIRPORTS[arrIata] || { city: item.arrival?.airport || 'Destination', name: arrIata };
-
-        return {
-          success: true,
-          data: {
-            airlineCode: parsed.code,
-            airlineName: item.airline?.name || airlineName,
-            flightNumber: formattedFlight,
-            travelDate: date,
-            fromCode: depIata,
-            fromCity: fromInfo.city,
-            fromAirport: fromInfo.name,
-            fromTerminal: item.departure?.terminal || fromInfo.defaultTerminal,
-            toCode: arrIata,
-            toCity: toInfo.city,
-            toAirport: toInfo.name,
-            toTerminal: item.arrival?.terminal || toInfo.defaultTerminal,
-            departureTime: item.departure?.scheduled?.slice(11, 16) || '08:30',
-            arrivalTime: item.arrival?.scheduled?.slice(11, 16) || '10:00',
-            duration: '1h 30m',
-            status: item.flight_status || 'Scheduled',
-          },
-        };
+          return {
+            success: true,
+            data: {
+              airlineCode: parsed.code,
+              airlineName: item.airline?.name || airlineName,
+              flightNumber: formattedFlight,
+              travelDate: date,
+              fromCode: depIata,
+              fromCity: fromInfo.city,
+              fromAirport: fromInfo.name,
+              fromTerminal: item.departure?.terminal || undefined,
+              toCode: arrIata,
+              toCity: toInfo.city,
+              toAirport: toInfo.name,
+              toTerminal: item.arrival?.terminal || undefined,
+              departureTime: dep?.slice(11, 16) || '',
+              arrivalTime: arr?.slice(11, 16) || '',
+              duration: mins > 0 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : '',
+              status: item.flight_status || 'Scheduled',
+            },
+          };
+        }
       }
+    } catch {
+      // Timeout or network error: fall through to curated list
     }
-  } catch {
-    // Timeout or network fallback
   }
 
   // 2. High-accuracy Corridor Database Check
@@ -191,39 +198,9 @@ export async function verifyFlightWaterfall(
     };
   }
 
-  // 3. Fallback: Parse valid carrier and synthesize route for Indian network
-  if (CARRIERS[parsed.code]) {
-    const isEven = parseInt(parsed.num, 10) % 2 === 0;
-    const fromIata = isEven ? 'AMD' : 'BOM';
-    const toIata = isEven ? 'BOM' : 'AMD';
-    const fromInfo = AIRPORTS[fromIata];
-    const toInfo = AIRPORTS[toIata];
-
-    return {
-      success: true,
-      data: {
-        airlineCode: parsed.code,
-        airlineName,
-        flightNumber: formattedFlight,
-        travelDate: date,
-        fromCode: fromIata,
-        fromCity: fromInfo.city,
-        fromAirport: fromInfo.name,
-        fromTerminal: fromInfo.defaultTerminal,
-        toCode: toIata,
-        toCity: toInfo.city,
-        toAirport: toInfo.name,
-        toTerminal: toInfo.defaultTerminal,
-        departureTime: '08:45',
-        arrivalTime: '10:05',
-        duration: '1h 20m',
-        status: 'Scheduled',
-      },
-    };
-  }
-
+  // No invented routes: unknown flights are reported as not found.
   return {
     success: false,
-    error: `Flight ${formattedFlight} not recognized. Please check carrier code (e.g. 6E, AI, QP, SG).`,
+    error: `Flight ${formattedFlight} not found for ${date}. Check the flight number and date.`,
   };
 }

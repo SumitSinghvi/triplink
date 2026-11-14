@@ -12,7 +12,7 @@ export const ActiveChatView: React.FC = () => {
     closeChat,
     matches,
     chats,
-    typing,
+    req,
     sendMessage,
     shareBusinessCard,
     profile,
@@ -34,7 +34,7 @@ export const ActiveChatView: React.FC = () => {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [msgs, typing]);
+  }, [msgs]);
 
   useEffect(() => {
     if (!activeChatId) return;
@@ -131,6 +131,9 @@ export const ActiveChatView: React.FC = () => {
       {/* Chat messages */}
       <div className="x-body" id="msgs">
         <div className="x-msgs">
+          {req[m.id] === 'accepted' && (
+            <p className="x-sys">You and {m.name} are connected.</p>
+          )}
           {msgs.map((x, idx) => {
             if (x.from === 'sys') {
               return (
@@ -140,32 +143,35 @@ export const ActiveChatView: React.FC = () => {
               );
             }
 
+            const delivery =
+              x.status === 'failed' ? (
+                <small style={{ display: 'block', color: '#b91c1c' }}>Not sent</small>
+              ) : x.status === 'pending' ? (
+                <small style={{ display: 'block', opacity: 0.6 }}>Sending…</small>
+              ) : null;
+
             if (x.card) {
+              // A card shows the sender's details: mine for my cards, the partner's for theirs.
+              const mine = x.from === 'me';
               return (
-                <div key={idx} className="x-msg x-msg--me">
+                <div key={x.id || idx} className={`x-msg x-msg--${x.from}`}>
                   <div className="x-msg__card">
-                    <b>{meName}</b>
-                    <span>{meSub}</span>
-                    <small>+91 {phone || 'shared by you'}</small>
+                    <b>{mine ? meName : m.name}</b>
+                    <span>{mine ? meSub : [m.company, m.industry].filter(Boolean).join(' · ')}</span>
+                    {mine && <small>+91 {phone || 'shared by you'}</small>}
                   </div>
+                  {delivery}
                 </div>
               );
             }
 
             return (
-              <div key={idx} className={`x-msg x-msg--${x.from}`}>
+              <div key={x.id || idx} className={`x-msg x-msg--${x.from}`}>
                 {x.text}
+                {delivery}
               </div>
             );
           })}
-
-          {typing === m.id && (
-            <div className="x-typing" aria-label="Typing">
-              <i />
-              <i />
-              <i />
-            </div>
-          )}
 
           <div ref={bottomRef} />
         </div>

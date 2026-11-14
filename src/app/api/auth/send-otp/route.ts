@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveOtp } from '@/lib/otpStore';
+import { saveOtp, DEMO_OTP_ALLOWED } from '@/lib/otpStore';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +22,13 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.FAST2SMS_API_KEY;
     if (!apiKey) {
-      // Dev mode without key: OTP 1234 / generated
+      if (!DEMO_OTP_ALLOWED) {
+        return NextResponse.json(
+          { success: false, error: 'SMS service is not configured. Please try again later.' },
+          { status: 503 }
+        );
+      }
+      // Dev mode without key: generated OTP returned in response (demo 1234 also accepted)
       return NextResponse.json({
         success: true,
         message: 'Dev mode: OTP saved',
@@ -53,12 +59,10 @@ export async function POST(req: NextRequest) {
       });
     } else {
       console.warn('Fast2SMS response warning:', fastData);
-      // Fallback response with success so user can still proceed with 1234 if SMS provider has delivery issue
-      return NextResponse.json({
-        success: true,
-        message: fastData?.message?.[0] || 'OTP request processed',
-        warning: 'SMS gateway delay, you can also use demo OTP 1234',
-      });
+      return NextResponse.json(
+        { success: false, error: 'Could not send SMS. Please try again in a minute.' },
+        { status: 502 }
+      );
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to send OTP';

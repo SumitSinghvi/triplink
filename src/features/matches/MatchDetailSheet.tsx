@@ -31,7 +31,7 @@ export const MatchDetailSheet: React.FC = () => {
             {m.verified && (
               <span className="x-ver">
                 <SvgIcon name="seal" size={16} width={0} />
-                Verified business
+                GSTIN added
               </span>
             )}
           </span>
@@ -50,14 +50,6 @@ export const MatchDetailSheet: React.FC = () => {
         {m.bio && <p className="x-sub">{m.bio}</p>}
 
         <div className="x-list">
-          {m.coach && (
-            <div className="x-li">
-              <span className="x-li__main">
-                <b>{m.coach}</b>
-                <small>Same train</small>
-              </span>
-            </div>
-          )}
           <button
             type="button"
             className="x-li"

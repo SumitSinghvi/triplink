@@ -130,7 +130,6 @@ export const ProfileSetupScreen: React.FC = () => {
                   placeholder="15-character GSTIN"
                   aria-label="GSTIN"
                   value={profile.gstin}
-                  readOnly={profile.verified}
                   onChange={(e) => updateProfileField('gstin', e.target.value.toUpperCase())}
                 />
                 {!profile.verified && (
@@ -139,14 +138,14 @@ export const ProfileSetupScreen: React.FC = () => {
                     className="x-btn x-btn--sm"
                     onClick={verifyGstin}
                   >
-                    Verify
+                    Check
                   </button>
                 )}
               </div>
               {profile.verified ? (
                 <span className="x-ver">
                   <SvgIcon name="seal" size={16} width={0} />
-                  Verified business
+                  GSTIN format valid
                 </span>
               ) : profile.gstErr ? (
                 <span className="x-err">{profile.gstErr}</span>

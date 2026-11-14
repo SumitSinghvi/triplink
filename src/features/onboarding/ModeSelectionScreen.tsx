@@ -5,19 +5,23 @@ import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 
 export const ModeSelectionScreen: React.FC = () => {
-  const { setScreen, modes, toggleMode } = useAppStore();
+  const { setScreen, modes, toggleMode, profile } = useAppStore();
+  // Reached only after login: new users have nowhere to go back to; editors return to the app.
+  const hasProfile = Boolean(profile.name || profile.first);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header className="x-bar x-bar--back">
-        <button
-          type="button"
-          className="x-icon-btn"
-          onClick={() => setScreen('otp')}
-          aria-label="Back"
-        >
-          <SvgIcon name="back" />
-        </button>
+        {hasProfile && (
+          <button
+            type="button"
+            className="x-icon-btn"
+            onClick={() => setScreen('main')}
+            aria-label="Back"
+          >
+            <SvgIcon name="back" />
+          </button>
+        )}
       </header>
 
       <div className="x-body">
