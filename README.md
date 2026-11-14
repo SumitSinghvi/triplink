@@ -15,8 +15,7 @@ Built with **Next.js (App Router)** + **TypeScript** + **Tailwind CSS** + **Luci
 
 2. **Interest-Based Co-Traveler Discovery:**
    - Filter co-passengers by domain: *Tech & AI*, *Startups & Business*, *Finance*, *UPSC/Govt*, *Casual & Chai*, *Books & Ideas*, *Travel & Photography*.
-   - **Same-Coach Filter:** Highlights and filters passengers sitting in your coach (e.g. `B4`).
-   - **Women-Only Travel Filter:** Provides safe, dedicated discovery for female travelers.
+   - **Coach-Aware Ranking:** Passengers in your coach or the next one rank higher. Coach numbers are never shown to others.
    - **Corridor Match Engine:** Solves the cold-start problem by displaying travelers taking the same route across alternative trains today.
 
 3. **Train Lounge (Live Chat for Train & Date):**
@@ -54,6 +53,12 @@ npm run start
 ```
 
 ---
+
+### 4. Database Migrations
+
+SQL migrations live in `supabase/migrations/`. Apply them in the Supabase SQL Editor (or `supabase db push`) in filename order.
+
+**Applied (2026-11-14):** `20261114000000_trip_visibility_codes_profile_fields.sql` (adds trip visibility, station codes, social profile fields and a daily `pg_cron` cleanup of past trips). The app checks for these columns at runtime and falls back to the legacy columns on databases where the migration has not run.
 
 ## 1-Click Demo Testing
 When opening the app, you can:

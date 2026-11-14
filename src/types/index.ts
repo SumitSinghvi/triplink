@@ -14,7 +14,6 @@ export type TripKind = 'train' | 'flight';
 export interface TripVisibility {
   business: boolean;
   social: boolean;
-  women: boolean;
   twoh: boolean;
 }
 
@@ -26,6 +25,11 @@ export interface TripData {
   when: string;
   /** Normalized YYYY-MM-DD; source of truth for matching. `when` is display-only. */
   travelDate?: string;
+  /** Station / airport codes (NDLS, BOM) for same-route matching. */
+  fromCode?: string;
+  toCode?: string;
+  /** ISO departure time when known (flights), used for "2h before" visibility. */
+  departsAt?: string;
   coach?: string;
   berth?: string;
   pnrMasked?: string;
@@ -87,6 +91,9 @@ export interface AddTripModalState {
     route: string;
     when: string;
     travelDate: string;
+    fromCode?: string;
+    toCode?: string;
+    departsAt?: string;
     coach?: string;
     berth?: string;
     pnrMasked?: string;

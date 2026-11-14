@@ -1,6 +1,6 @@
 // Self-check: node src/lib/travelDate.check.mjs
 import assert from 'node:assert/strict';
-import { normalizeTravelDate } from './travelDate.ts';
+import { normalizeTravelDate, todayIso } from './travelDate.ts';
 
 const cases = [
   ['2026-11-14', '2026-11-14'],
@@ -17,4 +17,7 @@ const cases = [
 ];
 
 for (const [input, want] of cases) assert.equal(normalizeTravelDate(input), want, String(input));
+// IST "today": 20:00 UTC on the 13th is already the 14th in India.
+assert.equal(todayIso(Date.parse('2026-11-13T20:00:00Z')), '2026-11-14');
+assert.equal(todayIso(Date.parse('2026-11-13T18:00:00Z')), '2026-11-13');
 console.log(`travelDate: ${cases.length} cases ok`);

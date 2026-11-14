@@ -29,6 +29,7 @@ export function normalizeTravelDate(raw: unknown): string | null {
   return null;
 }
 
-export function todayIso(): string {
-  return new Date().toISOString().split('T')[0];
+// "Today" in India (IST, UTC+5:30, no DST); UTC would be a day behind before 05:30 IST.
+export function todayIso(now = Date.now()): string {
+  return new Date(now + 330 * 60 * 1000).toISOString().split('T')[0];
 }

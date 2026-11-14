@@ -1,3 +1,4 @@
+import { todayIso } from './travelDate';
 import { TravelClass, BerthPreference } from '@/types';
 
 export interface DemoPresetPNR {
@@ -58,5 +59,5 @@ export const DEMO_PRESET_PNRS: DemoPresetPNR[] = [
 
 export function getDefaultTravelDate(): string {
   const d = new Date();
-  return d.toISOString().split('T')[0];
+  return todayIso(d.getTime());
 }

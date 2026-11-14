@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { MatchProfile, TripData, UserProfileData } from '@/store/initialData';
 import { normalizeTravelDate, todayIso } from './travelDate';
+import { canSee, showFromFor } from './tripVisibility';
 
 export interface SupabaseProfileRow {
   id: string;
@@ -71,12 +72,59 @@ export function tripKey(trip: TripData): string {
   return `${extractJourneyKey(trip.name)}_${tripTravelDate(trip) ?? trip.when}`;
 }
 
+// Part 2 columns come from supabase/migrations/20261114000000_*.sql, which may not be applied yet.
+// Probe once per session; until they exist, read/write only the legacy columns.
+let v2Schema: Promise<boolean> | null = null;
+export function hasV2Schema(): Promise<boolean> {
+  v2Schema ??= (async () => {
+    const [t, p] = await Promise.all([
+      supabase.from('trips').select('visible_business, from_station').limit(1),
+      supabase.from('profiles').select('first_name, mode_business').limit(1),
+    ]);
+    if (!t.error && !p.error) return true;
+    const missing = [t.error, p.error].some(
+      (e) => e && (e.code === '42703' || e.code === 'PGRST204' || /does not exist|schema cache/i.test(e.message))
+    );
+    if (missing) {
+      console.warn('Supabase migration pending (supabase/migrations): using legacy columns.');
+      return false;
+    }
+    v2Schema = null; // network/other error: don't cache, retry next call
+    return false;
+  })();
+  return v2Schema;
+}
+
+// Visibility for rows from either schema: legacy rows only have `mode`.
+function rowVisibility<T extends { mode?: string | null; visible_business?: boolean | null; visible_social?: boolean | null }>(
+  t: T
+): T & { visible_business: boolean; visible_social: boolean } {
+  return {
+    ...t,
+    visible_business: t.visible_business ?? t.mode !== 'social',
+    visible_social: t.visible_social ?? t.mode === 'social',
+  };
+}
+
 // 1. Sync User Profile to Supabase
-export async function syncUserProfile(userId: string, profile: UserProfileData): Promise<boolean> {
+export async function syncUserProfile(
+  userId: string,
+  profile: UserProfileData,
+  modes?: { business: boolean; social: boolean }
+): Promise<boolean> {
   try {
+    const v2 = (await hasV2Schema())
+      ? {
+          first_name: profile.first || null,
+          interests: profile.interests || [],
+          langs: profile.langs || [],
+          ...(modes ? { mode_business: modes.business, mode_social: modes.social } : {}),
+        }
+      : {};
     const { error } = await supabase.from('profiles').upsert({
       id: userId,
       name: profile.name || profile.first || 'Traveler',
+      ...v2,
       company: profile.company || null,
       industry: profile.industry || null,
       intent: profile.look && profile.look.length > 0 ? profile.look[0] : 'Partner',
@@ -97,11 +145,7 @@ export async function syncUserProfile(userId: string, profile: UserProfileData):
 }
 
 // 2. Sync Added Journey (Train or Flight) to Supabase
-export async function syncUserTrip(
-  userId: string,
-  trip: TripData,
-  mode: 'business' | 'social' = 'business'
-): Promise<boolean> {
+export async function syncUserTrip(userId: string, trip: TripData): Promise<boolean> {
   try {
     const cleanNumber = extractJourneyKey(trip.name);
 
@@ -114,6 +158,15 @@ export async function syncUserTrip(
     if (!travelDate) return false;
 
     const tripId = `trip_${userId}_${cleanNumber}_${travelDate}`;
+    const v2 = (await hasV2Schema())
+      ? {
+          visible_business: trip.vis.business,
+          visible_social: trip.vis.social,
+          show_from: showFromFor(trip.vis, travelDate, trip.departsAt),
+          from_station: trip.fromCode?.toUpperCase() || null,
+          to_station: trip.toCode?.toUpperCase() || null,
+        }
+      : {};
 
     const { error } = await supabase.from('trips').upsert({
       id: tripId,
@@ -124,7 +177,9 @@ export async function syncUserTrip(
       from_code: fromCode,
       to_code: toCode,
       coach: trip.coach || null,
-      mode: mode,
+      // Legacy single-mode label; also the visibility source until the migration runs.
+      mode: trip.vis.social && !trip.vis.business ? 'social' : 'business',
+      ...v2,
     });
 
     if (error) {
@@ -138,26 +193,34 @@ export async function syncUserTrip(
   }
 }
 
-// Load this user's trips from Supabase (re-login / new device). Visibility prefs are
-// device-local today, so restored trips get defaults derived from the stored mode.
+// Load this user's trips from Supabase (re-login / new device).
 export async function fetchUserTrips(userId: string): Promise<TripData[]> {
   try {
+    const columns: string = (await hasV2Schema())
+      ? 'id, train_number, train_name, travel_date, from_code, to_code, coach, mode, visible_business, visible_social, show_from, from_station, to_station'
+      : 'id, train_number, train_name, travel_date, from_code, to_code, coach, mode';
     const { data, error } = await supabase
       .from('trips')
-      .select('id, train_number, train_name, travel_date, from_code, to_code, coach, mode')
+      .select(columns)
       .eq('user_id', userId)
-      .gte('travel_date', new Date().toISOString().split('T')[0])
+      .gte('travel_date', todayIso())
       .order('travel_date');
     if (error || !data) return [];
-    return data.map((t) => ({
+    return (data as unknown as TripRow[]).map(rowVisibility).map((t) => ({
       id: t.id,
       kind: /^\d+$/.test(t.train_number) ? 'train' : 'flight',
       name: t.train_name,
       route: `${t.from_code} → ${t.to_code}`,
       when: t.travel_date,
       travelDate: t.travel_date,
+      fromCode: t.from_station || undefined,
+      toCode: t.to_station || undefined,
       coach: t.coach || undefined,
-      vis: { business: t.mode !== 'social', social: t.mode === 'social', women: false, twoh: false },
+      vis: {
+        business: t.visible_business,
+        social: t.visible_social,
+        twoh: Boolean(t.show_from),
+      },
     }));
   } catch (err) {
     console.warn('fetchUserTrips exception:', err);
@@ -185,6 +248,26 @@ export function calculateCoachProximity(userCoach?: string, otherCoach?: string)
   return none;
 }
 
+const TRIP_MATCH_COLUMNS_LEGACY = 'id, user_id, train_number, train_name, travel_date, coach, mode';
+const TRIP_MATCH_COLUMNS = `${TRIP_MATCH_COLUMNS_LEGACY}, visible_business, visible_social, show_from`;
+
+interface TripRow {
+  id: string;
+  user_id: string;
+  train_number: string;
+  train_name: string;
+  travel_date: string;
+  from_code?: string;
+  to_code?: string;
+  coach: string | null;
+  mode: string | null;
+  visible_business?: boolean | null;
+  visible_social?: boolean | null;
+  show_from?: string | null;
+  from_station?: string | null;
+  to_station?: string | null;
+}
+
 // 3. Find Co-Travelers on Same Train / Flight & Date
 export async function fetchLiveCoTravelers(
   trip: TripData,
@@ -197,35 +280,37 @@ export async function fetchLiveCoTravelers(
     const travelDate = tripTravelDate(trip);
     if (!travelDate) return [];
 
+    const v2 = await hasV2Schema();
+    const columns: string = v2 ? TRIP_MATCH_COLUMNS : TRIP_MATCH_COLUMNS_LEGACY;
+
     // 1. Query trips table for matching journey number + travel date
     const { data: initialTrips, error: tripErr } = await supabase
       .from('trips')
-      .select('id, user_id, train_number, train_name, travel_date, coach, mode, from_code, to_code')
+      .select(columns)
       .eq('train_number', cleanNumber)
       .eq('travel_date', travelDate)
       .neq('user_id', currentUserId);
 
-    let matchingTrips = initialTrips;
+    let matchingTrips = (initialTrips as unknown as TripRow[] | null)?.map(rowVisibility) ?? null;
 
-    // 2. Corridor Fallback: If no exact train match, check route corridor
+    // 2. Same-route fallback on station/airport codes (trips saved before codes existed skip this).
     let isCorridorMatch = false;
     if (!tripErr && (!matchingTrips || matchingTrips.length === 0)) {
-      const routeParts = trip.route.split(/→|->/);
-      const fromCode = (routeParts[0] || '').trim().slice(0, 50);
-      const toCode = (routeParts[1] || '').trim().slice(0, 50);
+      const fromCode = trip.fromCode?.toUpperCase();
+      const toCode = trip.toCode?.toUpperCase();
 
-      if (fromCode && toCode) {
+      if (v2 && fromCode && toCode) {
         const { data: corridorTrips } = await supabase
           .from('trips')
-          .select('id, user_id, train_number, train_name, travel_date, coach, mode, from_code, to_code')
+          .select(columns)
           .eq('travel_date', travelDate)
-          .ilike('from_code', `%${fromCode}%`)
-          .ilike('to_code', `%${toCode}%`)
+          .eq('from_station', fromCode)
+          .eq('to_station', toCode)
           .neq('user_id', currentUserId)
-          .limit(10);
+          .limit(20);
 
         if (corridorTrips && corridorTrips.length > 0) {
-          matchingTrips = corridorTrips;
+          matchingTrips = (corridorTrips as unknown as TripRow[]).map(rowVisibility);
           isCorridorMatch = true;
         }
       }
@@ -235,11 +320,14 @@ export async function fetchLiveCoTravelers(
       return [];
     }
 
-    // One entry per person (corridor can return several rows per user); drop blocked either way.
+    // One entry per person (corridor can return several rows per user); drop blocked either way;
+    // respect each trip's visibility (shared mode + "show me 2h before").
     const blocked = await fetchBlockedIds(currentUserId);
     const seenUsers = new Set<string>();
+    const now = Date.now();
     matchingTrips = matchingTrips.filter((t) => {
       if (!t.user_id || blocked.has(t.user_id) || seenUsers.has(t.user_id)) return false;
+      if (!canSee(trip.vis, t, now)) return false;
       seenUsers.add(t.user_id);
       return true;
     });
@@ -270,7 +358,7 @@ export async function fetchLiveCoTravelers(
         is_verified: false,
       };
 
-      const displayName = p.name || 'Traveler';
+      const displayName = p.name || p.first_name || 'Traveler';
       const initials = displayName
         .split(' ')
         .filter(Boolean)
@@ -284,7 +372,7 @@ export async function fetchLiveCoTravelers(
         p.industry &&
         currentUserIndustry.toLowerCase() === p.industry.toLowerCase();
 
-      const proximity = calculateCoachProximity(trip.coach, t.coach);
+      const proximity = calculateCoachProximity(trip.coach, t.coach ?? undefined);
 
       let fitScore = 80;
       if (isSameIndustry) fitScore += 12;
@@ -302,14 +390,16 @@ export async function fetchLiveCoTravelers(
       return {
         id: `match_${p.id}`,
         tripId: trip.id,
-        type: t.mode === 'social' ? 'Social' : 'Business',
+        // Business when both have business on; otherwise they matched via social.
+        type: trip.vis.business && t.visible_business !== false ? 'Business' : 'Social',
         name: displayName,
         company: p.company || 'Co-Passenger',
         industry: p.industry || 'General',
         ini: initials,
         fit: fitScore,
         line: statusLine,
-        tags: p.industry ? [p.industry] : ['Traveler'],
+        tags: p.interests?.length ? p.interests : p.industry ? [p.industry] : ['Traveler'],
+        langs: p.langs?.length ? p.langs.join(', ') : undefined,
         verified: p.is_verified || false,
         cities: p.cities || undefined,
         lookingFor: p.intent ? [p.intent] : ['Partner'],
@@ -496,7 +586,7 @@ export async function fetchUserRequestsAndMatches(userId: string): Promise<{
 
     const contacts: MatchProfile[] = [...acceptedIds].map((id) => {
       const p = profMap.get(id);
-      const name = p?.name || 'Traveler';
+      const name = p?.name || p?.first_name || 'Traveler';
       return {
         id: `match_${id}`,
         tripId: '',
@@ -508,6 +598,8 @@ export async function fetchUserRequestsAndMatches(userId: string): Promise<{
         verified: p?.is_verified || false,
         cities: p?.cities || undefined,
         lookingFor: p?.intent ? [p.intent] : undefined,
+        tags: p?.interests?.length ? p.interests : undefined,
+        langs: p?.langs?.length ? p.langs.join(', ') : undefined,
       };
     });
 

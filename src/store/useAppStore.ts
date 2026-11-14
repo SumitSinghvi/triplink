@@ -31,6 +31,17 @@ import {
   newMessageId,
 } from '@/lib/supabaseSync';
 import { mergeChat, countNewIncoming } from '@/lib/chatMerge';
+import { todayIso } from '@/lib/travelDate';
+
+// Replace a trip's co-travellers. Contact-only entries (tripId '') for the same people are
+// dropped so lookups by id find the richer trip entry (fit, line, trip for Connect).
+function withTripMatches(matches: MatchProfile[], tripId: string, fresh: MatchProfile[]): MatchProfile[] {
+  const freshIds = new Set(fresh.map((m) => m.id));
+  return [
+    ...matches.filter((m) => m.tripId !== tripId && !(m.tripId === '' && freshIds.has(m.id))),
+    ...fresh,
+  ];
+}
 
 // Clears or flags a local message's delivery status after the send settles.
 function withDelivery(
@@ -136,7 +147,11 @@ export interface AppState {
 
   // Actions
   setUserId: (userId: string) => void;
-  loginUser: (userId: string, profile?: Partial<UserProfileData>) => void;
+  loginUser: (
+    userId: string,
+    profile?: Partial<UserProfileData>,
+    modes?: { business: boolean; social: boolean }
+  ) => void;
   setScreen: (screen: AppState['screen']) => void;
   setTab: (tab: AppState['tab']) => void;
   setPhone: (phone: string) => void;
@@ -212,7 +227,7 @@ export const useAppStore = create<AppState>()(
       toastMessage: null,
 
       setUserId: (userId) => set({ userId }),
-      loginUser: (userId, existingProfile) => {
+      loginUser: (userId, existingProfile, savedModes) => {
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem('triplink_user_id', userId);
@@ -225,6 +240,7 @@ export const useAppStore = create<AppState>()(
             ...base,
             userId,
             profile: existingProfile ? { ...base.profile, ...existingProfile } : base.profile,
+            modes: savedModes ?? base.modes,
           };
         });
 
@@ -248,10 +264,14 @@ export const useAppStore = create<AppState>()(
         set({ otp: next });
       },
       setFullOtp: (otpArr) => set({ otp: Array.isArray(otpArr) ? otpArr : ['', '', '', ''] }),
-      toggleMode: (m) =>
+      toggleMode: (m) => {
         set((state) => ({
           modes: { ...state.modes, [m]: !state.modes[m] },
-        })),
+        }));
+        // Mode changes from the Profile tab apply immediately; onboarding syncs on save.
+        const { screen, userId, profile, modes } = get();
+        if (screen === 'main') syncUserProfile(userId, profile, modes);
+      },
       updateProfileField: (k, v) =>
         set((state) => ({
           // Changing the GSTIN invalidates the previous format check.
@@ -279,8 +299,8 @@ export const useAppStore = create<AppState>()(
         }
       },
       saveProfileAndEnter: () => {
-        const { userId, profile } = get();
-        syncUserProfile(userId, profile);
+        const { userId, profile, modes } = get();
+        syncUserProfile(userId, profile, modes);
         set({ screen: 'main', tab: 'trips' });
         get().showToast('Profile Saved');
       },
@@ -292,11 +312,11 @@ export const useAppStore = create<AppState>()(
             kind: 'train',
             pnr: '',
             flight: '',
-            date: new Date().toISOString().split('T')[0],
+            date: todayIso(),
             found: null,
             loading: false,
             err: '',
-            vis: { business: true, social: get().modes.social, women: false, twoh: false },
+            vis: { business: true, social: get().modes.social, twoh: false },
           },
         }),
       closeAddTrip: () => set({ add: null }),
@@ -315,13 +335,15 @@ export const useAppStore = create<AppState>()(
           route: add.found.route,
           when: add.found.when,
           travelDate: add.found.travelDate,
+          fromCode: add.found.fromCode,
+          toCode: add.found.toCode,
+          departsAt: add.found.departsAt,
           coach: add.found.coach,
           berth: add.found.berth,
           pnrMasked: add.found.pnrMasked,
           vis: {
             business: add.vis.business,
             social: add.vis.social,
-            women: add.vis.women && add.vis.social,
             twoh: add.vis.twoh,
           },
         };
@@ -333,15 +355,10 @@ export const useAppStore = create<AppState>()(
         }));
 
         const { userId, profile, modes } = get();
-        syncUserProfile(userId, profile);
-        syncUserTrip(userId, newTrip, modes.social ? 'social' : 'business');
+        // trips.user_id references profiles: the profile row must exist before the trip insert.
+        syncUserProfile(userId, profile, modes).then(() => syncUserTrip(userId, newTrip));
         fetchLiveCoTravelers(newTrip, userId, profile.industry).then((coTravelers) => {
-          set((state) => ({
-            matches: [
-              ...state.matches.filter((m) => m.tripId !== newId),
-              ...coTravelers,
-            ],
-          }));
+          set((state) => ({ matches: withTripMatches(state.matches, newId, coTravelers) }));
         });
 
         get().showToast('Trip Added Successfully', 'View Matches', () => {
@@ -358,12 +375,7 @@ export const useAppStore = create<AppState>()(
         if (!trip) return;
         const { userId, profile } = get();
         const coTravelers = await fetchLiveCoTravelers(trip, userId, profile.industry);
-        set((state) => ({
-          matches: [
-            ...state.matches.filter((m) => m.tripId !== trip.id),
-            ...coTravelers,
-          ],
-        }));
+        set((state) => ({ matches: withTripMatches(state.matches, trip.id, coTravelers) }));
       },
       syncUserRequests: async () => {
         const { userId } = get();

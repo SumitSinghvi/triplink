@@ -55,6 +55,12 @@ export const OtpScreen: React.FC = () => {
               cities: data.profile.cities || ['Ahmedabad', 'Mumbai'],
               gstin: data.profile.gstin || '',
               verified: data.profile.is_verified || false,
+              first: data.profile.first_name || '',
+              interests: data.profile.interests || [],
+              langs: data.profile.langs || [],
+            }, {
+              business: data.profile.mode_business ?? true,
+              social: data.profile.mode_social ?? false,
             });
             setScreen('main');
           } else {

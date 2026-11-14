@@ -36,6 +36,8 @@ export const AddTripSheet: React.FC = () => {
               route: `${d.fromName || d.fromCode} → ${d.toName || d.toCode}`,
               when: d.travelDate,
               travelDate: d.travelDate,
+              fromCode: d.fromCode || undefined,
+              toCode: d.toCode || undefined,
               coach: d.coach,
               berth: d.berthNumber ? `Berth ${d.berthNumber} (${d.berthType || 'Confirmed'})` : '',
               pnrMasked: d.maskedPnr,
@@ -80,6 +82,10 @@ export const AddTripSheet: React.FC = () => {
               route: `${d.fromCity} (${d.fromCode})${fromTerm} → ${d.toCity} (${d.toCode})${toTerm}`,
               when: `${d.travelDate} · ${d.departureTime} - ${d.arrivalTime} (${d.duration})`,
               travelDate: d.travelDate,
+              fromCode: d.fromCode,
+              toCode: d.toCode,
+              // ponytail: assumes IST departure (domestic corridor); use airport tz for international.
+              departsAt: d.departureTime ? `${d.travelDate}T${d.departureTime}:00+05:30` : undefined,
             },
           });
         } else {
