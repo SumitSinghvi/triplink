@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 
@@ -14,16 +14,36 @@ export const MatchesTab: React.FC = () => {
     filter,
     setFilter,
     matches,
+    incomingRequests,
     gone,
     req,
     openDetail,
     connectWith,
+    acceptIncomingRequest,
+    declineIncomingRequest,
     openChat,
     profile,
     setTab,
+    refreshLiveMatches,
+    syncUserRequests,
   } = useAppStore();
 
   const selectedTrip = trips.find((t) => t.id === selTripId) || trips[0];
+  const tripId = selectedTrip?.id;
+
+  useEffect(() => {
+    if (tripId) {
+      refreshLiveMatches(tripId).catch(() => {});
+    }
+    syncUserRequests().catch(() => {});
+
+    // Poll every 15s instead of Realtime WebSocket (avoids page hang)
+    const interval = setInterval(() => {
+      if (tripId) refreshLiveMatches(tripId).catch(() => {});
+      syncUserRequests().catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [tripId, refreshLiveMatches, syncUserRequests]);
 
   if (!selectedTrip) {
     return (
@@ -94,9 +114,54 @@ export const MatchesTab: React.FC = () => {
           ))}
         </div>
 
-        <p className="x-sub">
-          {all.length} matches · {selectedTrip.route}
+        <p className="x-sub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{all.length} matches · {selectedTrip.route}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#16a34a', fontWeight: 600 }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
+            Live Co-Travelers
+          </span>
         </p>
+
+        {incomingRequests.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <p className="x-sub" style={{ fontWeight: 600, color: 'var(--accent, #6366f1)', marginBottom: '8px' }}>
+              Incoming Requests ({incomingRequests.length})
+            </p>
+            {incomingRequests.map((reqItem) => (
+              <div key={reqItem.id} className="x-card" style={{ borderColor: 'var(--accent, #6366f1)' }}>
+                <div className="x-m__top">
+                  <span className="x-av">{reqItem.ini}</span>
+                  <span className="x-m__name">
+                    <b>{reqItem.name}</b>
+                    <small>{reqItem.company} · {reqItem.industry}</small>
+                  </span>
+                  <span className="x-fit">{reqItem.fit}%<small>fit</small></span>
+                </div>
+                <p className="x-m__line" style={{ marginTop: '6px' }}>
+                  Wants to connect on {reqItem.trainNumber} ({reqItem.travelDate})
+                </p>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    className="x-btn x-btn--sm"
+                    style={{ flex: 1 }}
+                    onClick={() => acceptIncomingRequest(reqItem)}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    className="x-btn x-btn--sm x-btn--subtle"
+                    style={{ flex: 1 }}
+                    onClick={() => declineIncomingRequest(reqItem.id)}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {list.length > 0 ? (
           list.map((m) => {
@@ -149,7 +214,7 @@ export const MatchesTab: React.FC = () => {
                       e.stopPropagation();
                       if (r === 'accepted') {
                         openChat(m.id);
-                      } else if (!r) {
+                      } else if (r !== 'sent') {
                         connectWith(m.id);
                       }
                     }}

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 
@@ -9,14 +9,35 @@ export const PhoneScreen: React.FC = () => {
   const phone = useAppStore((s) => s.phone);
   const setPhone = useAppStore((s) => s.setPhone);
   const showToast = useAppStore((s) => s.showToast);
+  const [loading, setLoading] = useState(false);
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     const clean = (phone || '').replace(/\D/g, '');
     if (clean.length < 10) {
       showToast('Enter a valid 10-digit mobile number');
       return;
     }
-    setScreen('otp');
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: clean }),
+      });
+      const data = await res.json();
+
+      if (data?.success) {
+        showToast(data.message || 'OTP sent to mobile');
+        setScreen('otp');
+      } else {
+        showToast(data?.error || 'Failed to send OTP. Try again.');
+      }
+    } catch {
+      showToast('Network error while sending OTP');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,8 +75,8 @@ export const PhoneScreen: React.FC = () => {
       </div>
 
       <div className="x-foot">
-        <button type="button" className="x-btn" onClick={handleSendOtp}>
-          Send OTP
+        <button type="button" className="x-btn" disabled={loading} onClick={handleSendOtp}>
+          {loading ? 'Sending OTP...' : 'Send OTP'}
         </button>
       </div>
     </div>

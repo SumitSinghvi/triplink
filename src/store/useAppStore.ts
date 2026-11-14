@@ -12,8 +12,23 @@ import {
   DEFAULT_TRIPS,
   DEFAULT_MATCHES,
   INITIAL_CHATS,
-  BOT_REPLIES,
 } from './initialData';
+import {
+  syncUserProfile,
+  syncUserTrip,
+  fetchLiveCoTravelers,
+  sendConnectionRequest,
+  respondToConnectionRequest,
+  fetchUserRequestsAndMatches,
+  sendChatMessageToSupabase,
+  fetchLiveChatMessages,
+  IncomingRequestItem,
+  deleteUserAccount,
+  blockUserInSupabase,
+  reportUserInSupabase,
+  fetchUserTrips,
+  tripKey,
+} from '@/lib/supabaseSync';
 
 export type {
   TripData,
@@ -21,9 +36,56 @@ export type {
   ChatMessage,
   UserProfileData,
   AddTripModalState,
+  IncomingRequestItem,
 };
 
+function newAnonUserId(): string {
+  const id = `user_${Math.random().toString(36).substring(2, 10)}`;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('triplink_user_id', id);
+    } catch {}
+  }
+  return id;
+}
+
+// User-scoped data that must not leak between accounts on the same device.
+function blankUserData() {
+  return {
+    profile: INITIAL_USER_PROFILE,
+    trips: [] as TripData[],
+    selTripId: null,
+    filter: 'All' as const,
+    matches: [] as MatchProfile[],
+    incomingRequests: [] as IncomingRequestItem[],
+    req: {},
+    gone: {},
+    chats: {},
+    unread: {},
+    typing: null,
+    add: null,
+    activeChatId: null,
+    sheet: null,
+    pro: false,
+  };
+}
+
+function getOrCreateUserId(): string {
+  if (typeof window === 'undefined') return 'user_server';
+  try {
+    let id = localStorage.getItem('triplink_user_id');
+    if (!id) {
+      id = `user_${Math.random().toString(36).substring(2, 10)}`;
+      localStorage.setItem('triplink_user_id', id);
+    }
+    return id;
+  } catch {
+    return 'user_client';
+  }
+}
+
 export interface AppState {
+  userId: string;
   // Navigation / Screen
   screen: 'welcome' | 'phone' | 'otp' | 'mode' | 'create' | 'main';
   tab: 'trips' | 'matches' | 'chats' | 'profile';
@@ -42,6 +104,7 @@ export interface AppState {
   selTripId: string | null;
   filter: 'All' | 'Business' | 'Social' | 'Same industry';
   matches: MatchProfile[];
+  incomingRequests: IncomingRequestItem[];
 
   // Connects & Chats
   req: Record<string, 'sent' | 'accepted' | 'declined'>;
@@ -57,6 +120,8 @@ export interface AppState {
   toastMessage: { text: string; actionLabel?: string; onAction?: () => void } | null;
 
   // Actions
+  setUserId: (userId: string) => void;
+  loginUser: (userId: string, profile?: Partial<UserProfileData>) => void;
   setScreen: (screen: AppState['screen']) => void;
   setTab: (tab: AppState['tab']) => void;
   setPhone: (phone: string) => void;
@@ -67,12 +132,16 @@ export interface AppState {
   verifyGstin: () => void;
   saveProfileAndEnter: () => void;
 
-  // Trips
+  // Trips & Matches
   openAddTrip: () => void;
   closeAddTrip: () => void;
   updateAddTrip: (partial: Partial<AddTripModalState>) => void;
   confirmAddTrip: () => void;
   selectTrip: (id: string) => void;
+  refreshLiveMatches: (tripId?: string) => Promise<void>;
+  syncUserRequests: () => Promise<void>;
+  acceptIncomingRequest: (reqItem: IncomingRequestItem) => Promise<void>;
+  declineIncomingRequest: (requestId: string) => Promise<void>;
 
   // Matches & Connect
   setFilter: (f: AppState['filter']) => void;
@@ -81,23 +150,27 @@ export interface AppState {
   openSheet: (sheet: AppState['sheet']) => void;
   connectWith: (matchId: string) => void;
   blockPerson: (matchId: string) => void;
+  reportPerson: (matchId: string, reason: string, details?: string) => void;
 
   // Messaging
   openChat: (matchId: string) => void;
   closeChat: () => void;
   sendMessage: (text: string) => void;
   shareBusinessCard: () => void;
+  syncChatMessages: (matchId: string) => Promise<void>;
 
   // Toast & Pro & Reset
   showToast: (text: string, actionLabel?: string, onAction?: () => void) => void;
   clearToast: () => void;
   togglePro: () => void;
+  logout: () => void;
   resetAll: () => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      userId: getOrCreateUserId(),
       screen: 'welcome',
       tab: 'trips',
       activeChatId: null,
@@ -113,6 +186,7 @@ export const useAppStore = create<AppState>()(
       selTripId: null,
       filter: 'All',
       matches: DEFAULT_MATCHES,
+      incomingRequests: [],
 
       req: {},
       gone: {},
@@ -123,6 +197,33 @@ export const useAppStore = create<AppState>()(
       add: null,
       toastMessage: null,
 
+      setUserId: (userId) => set({ userId }),
+      loginUser: (userId, existingProfile) => {
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('triplink_user_id', userId);
+          } catch {}
+        }
+        set((state) => {
+          // Different account than what's cached locally -> drop previous user's data.
+          const base = state.userId === userId ? state : { ...state, ...blankUserData() };
+          return {
+            ...base,
+            userId,
+            profile: existingProfile ? { ...base.profile, ...existingProfile } : base.profile,
+          };
+        });
+
+        // Pull this account's trips from Supabase (new device / re-login).
+        fetchUserTrips(userId).then((remote) => {
+          if (get().userId !== userId || remote.length === 0) return;
+          set((state) => {
+            const seen = new Set(state.trips.map(tripKey));
+            const missing = remote.filter((t) => !seen.has(tripKey(t)));
+            return { trips: [...state.trips, ...missing] };
+          });
+        });
+      },
       setScreen: (screen) => set({ screen }),
       setTab: (tab) => set({ tab, activeChatId: null, sheet: null }),
       setPhone: (phone) => set({ phone }),
@@ -160,6 +261,8 @@ export const useAppStore = create<AppState>()(
         }
       },
       saveProfileAndEnter: () => {
+        const { userId, profile } = get();
+        syncUserProfile(userId, profile);
         set({ screen: 'main', tab: 'trips' });
         get().showToast('Profile Saved');
       },
@@ -193,6 +296,7 @@ export const useAppStore = create<AppState>()(
           name: add.found.name,
           route: add.found.route,
           when: add.found.when,
+          travelDate: add.found.travelDate,
           coach: add.found.coach,
           berth: add.found.berth,
           pnrMasked: add.found.pnrMasked,
@@ -209,41 +313,146 @@ export const useAppStore = create<AppState>()(
           add: null,
           tab: 'trips',
         }));
+
+        const { userId, profile, modes } = get();
+        syncUserProfile(userId, profile);
+        syncUserTrip(userId, newTrip, modes.social ? 'social' : 'business');
+        fetchLiveCoTravelers(newTrip, userId, profile.industry).then((coTravelers) => {
+          set((state) => ({
+            matches: [
+              ...state.matches.filter((m) => m.tripId !== newId),
+              ...coTravelers,
+            ],
+          }));
+        });
+
         get().showToast('Trip Added Successfully', 'View Matches', () => {
           set({ selTripId: newId, tab: 'matches' });
         });
       },
-      selectTrip: (id) => set({ selTripId: id, tab: 'matches', filter: 'All' }),
+      selectTrip: (id) => {
+        set({ selTripId: id, tab: 'matches', filter: 'All' });
+        get().refreshLiveMatches(id);
+      },
+      refreshLiveMatches: async (tripId) => {
+        const targetId = tripId || get().selTripId;
+        const trip = get().trips.find((t) => t.id === targetId);
+        if (!trip) return;
+        const { userId, profile } = get();
+        const coTravelers = await fetchLiveCoTravelers(trip, userId, profile.industry);
+        set((state) => ({
+          matches: [
+            ...state.matches.filter((m) => m.tripId !== trip.id),
+            ...coTravelers,
+          ],
+        }));
+      },
+      syncUserRequests: async () => {
+        const { userId } = get();
+        const { incoming, reqStatus, contacts } = await fetchUserRequestsAndMatches(userId);
+        if (get().userId !== userId) return; // logged out / switched meanwhile
+        set((state) => {
+          // Keep trip-scoped match entries; add accepted contacts not otherwise known so chats render.
+          const known = new Set(state.matches.map((m) => m.id));
+          const chats = { ...state.chats };
+          for (const c of contacts) if (!chats[c.id] && !state.gone[c.id]) chats[c.id] = [];
+          return {
+            incomingRequests: incoming.filter((r) => !state.gone[`match_${r.requesterId}`]),
+            req: { ...state.req, ...reqStatus },
+            matches: [...state.matches, ...contacts.filter((c) => !known.has(c.id))],
+            chats,
+          };
+        });
+      },
+      acceptIncomingRequest: async (reqItem) => {
+        if (!(await respondToConnectionRequest(reqItem.id, 'accepted'))) {
+          get().showToast('Could not accept request. Try again.');
+          return;
+        }
+        const matchKey = `match_${reqItem.requesterId}`;
+        set((state) => ({
+          incomingRequests: state.incomingRequests.filter((r) => r.id !== reqItem.id),
+          req: { ...state.req, [matchKey]: 'accepted' },
+          // Requester may not be in any loaded trip's matches; keep a contact so chat can render.
+          matches: state.matches.some((m) => m.id === matchKey)
+            ? state.matches
+            : [
+                ...state.matches,
+                {
+                  id: matchKey,
+                  tripId: '',
+                  type: 'Business',
+                  name: reqItem.name,
+                  company: reqItem.company,
+                  industry: reqItem.industry,
+                  ini: reqItem.ini,
+                  fit: reqItem.fit,
+                },
+              ],
+          chats: {
+            ...state.chats,
+            [matchKey]: [
+              { from: 'sys', text: `You and ${reqItem.name} are now connected.` },
+            ],
+          },
+        }));
+        get().showToast(`Connected with ${reqItem.name}!`, 'Chat', () => {
+          get().openChat(matchKey);
+        });
+      },
+      declineIncomingRequest: async (requestId) => {
+        await respondToConnectionRequest(requestId, 'declined');
+        set((state) => ({
+          incomingRequests: state.incomingRequests.filter((r) => r.id !== requestId),
+        }));
+        get().showToast('Request declined');
+      },
 
       setFilter: (filter) => set({ filter }),
       openDetail: (matchId) => set({ sheet: { kind: 'detail', id: matchId } }),
       closeSheet: () => set({ sheet: null }),
       openSheet: (sheet) => set({ sheet }),
       connectWith: (matchId) => {
-        set((state) => ({
-          req: { ...state.req, [matchId]: 'sent' },
-        }));
         const match = get().matches.find((m) => m.id === matchId);
-        get().showToast(`Request sent to ${match?.name || 'traveler'}`);
+        // Request belongs to the trip this match was found on, not whatever is selected.
+        const trip = get().trips.find((t) => t.id === match?.tripId);
+        if (!match || !trip) return;
 
-        setTimeout(() => {
-          set((state) => ({
-            req: { ...state.req, [matchId]: 'accepted' },
-            chats: {
-              ...state.chats,
-              [matchId]: [
-                { from: 'sys', text: `You and ${match?.name} are now connected.` },
-                { from: 'them', text: `Hi! Happy to connect on this trip.` },
-              ],
-            },
-            unread: { ...state.unread, [matchId]: true },
-          }));
-          get().showToast(`${match?.name} accepted your connection!`, 'Chat', () => {
-            get().openChat(matchId);
+        const prev = get().req[matchId];
+        set((state) => ({ req: { ...state.req, [matchId]: 'sent' } }));
+
+        const receiverId = match.id.replace(/^match_/, '');
+        sendConnectionRequest(get().userId, receiverId, trip, match.fit).then((status) => {
+          set((state) => {
+            const req = { ...state.req };
+            if (status) req[matchId] = status;
+            else if (prev) req[matchId] = prev;
+            else delete req[matchId];
+            const chats =
+              status === 'accepted' && !state.chats[matchId]
+                ? { ...state.chats, [matchId]: [] }
+                : state.chats;
+            return {
+              req,
+              chats,
+              incomingRequests:
+                status === 'accepted'
+                  ? state.incomingRequests.filter((r) => r.requesterId !== receiverId)
+                  : state.incomingRequests,
+            };
           });
-        }, 2200);
+          if (status === 'sent') get().showToast(`Request sent to ${match.name}`);
+          else if (status === 'accepted')
+            get().showToast(`Connected with ${match.name}!`, 'Chat', () => get().openChat(matchId));
+          else if (status === 'declined') get().showToast(`${match.name} declined your earlier request`);
+          else get().showToast('Could not send request. Try again.');
+        });
       },
       blockPerson: (matchId) => {
+        const { userId } = get();
+        const otherUserId = matchId.replace(/^match_/, '');
+        blockUserInSupabase(userId, otherUserId);
+
         set((state) => {
           const newReq = { ...state.req };
           delete newReq[matchId];
@@ -263,6 +472,12 @@ export const useAppStore = create<AppState>()(
         });
         get().showToast('User blocked and removed');
       },
+      reportPerson: (matchId, reason, details) => {
+        const { userId } = get();
+        const otherUserId = matchId.replace(/^match_/, '');
+        reportUserInSupabase(userId, otherUserId, reason, details);
+        get().blockPerson(matchId);
+      },
 
       openChat: (matchId) => {
         set((state) => {
@@ -275,13 +490,28 @@ export const useAppStore = create<AppState>()(
             sheet: null,
           };
         });
+        get().syncChatMessages(matchId);
       },
       closeChat: () => set({ activeChatId: null }),
+      syncChatMessages: async (matchId) => {
+        const { userId } = get();
+        const liveMsgs = await fetchLiveChatMessages(matchId, userId);
+        if (liveMsgs.length > 0) {
+          set((state) => ({
+            chats: {
+              ...state.chats,
+              [matchId]: liveMsgs,
+            },
+          }));
+        }
+      },
       sendMessage: (text) => {
         const id = get().activeChatId;
         if (!id || !text.trim()) return;
 
         const clean = text.trim();
+        const { userId } = get();
+
         set((state) => {
           const current = state.chats[id] || [];
           return {
@@ -292,32 +522,14 @@ export const useAppStore = create<AppState>()(
           };
         });
 
-        set({ typing: id });
-        setTimeout(() => {
-          if (get().activeChatId === id) {
-            const replies = BOT_REPLIES;
-            const chosen = replies[Math.floor(Math.random() * replies.length)];
-            set((state) => {
-              const current = state.chats[id] || [];
-              return {
-                chats: {
-                  ...state.chats,
-                  [id]: [...current, { from: 'them', text: chosen, timestamp: 'Now' }],
-                },
-                typing: null,
-              };
-            });
-          } else {
-            set((state) => ({
-              typing: null,
-              unread: { ...state.unread, [id]: true },
-            }));
-          }
-        }, 1500);
+        sendChatMessageToSupabase(id, userId, clean).then((ok) => {
+          if (!ok) get().showToast('Message not delivered. Check connection.');
+        });
       },
       shareBusinessCard: () => {
         const id = get().activeChatId;
         if (!id) return;
+        const { userId } = get();
         set((state) => {
           const current = state.chats[id] || [];
           return {
@@ -326,6 +538,9 @@ export const useAppStore = create<AppState>()(
               [id]: [...current, { from: 'me', card: true, timestamp: 'Now' }],
             },
           };
+        });
+        sendChatMessageToSupabase(id, userId, 'Shared business card', true).then((ok) => {
+          if (!ok) get().showToast('Business card not delivered. Check connection.');
         });
         get().showToast('Business Card Shared');
       },
@@ -345,36 +560,35 @@ export const useAppStore = create<AppState>()(
           get().showToast(next ? 'TripLink Pro Active' : 'TripLink Pro Canceled');
           return { pro: next };
         }),
-      resetAll: () => {
+      // Clears this device only. Server data stays so the user can log back in.
+      logout: () => {
         set({
+          ...blankUserData(),
+          userId: newAnonUserId(),
           screen: 'welcome',
           tab: 'trips',
-          activeChatId: null,
-          sheet: null,
           phone: '',
           otp: ['', '', '', ''],
           modes: { business: true, social: false },
-          profile: INITIAL_USER_PROFILE,
-          trips: [],
-          selTripId: null,
-          filter: 'All',
-          matches: [],
-          req: {},
-          gone: {},
-          chats: {},
-          unread: {},
-          typing: null,
-          add: null,
           toastMessage: null,
-          pro: false,
         });
-        get().showToast('App reset to clean state');
+        get().showToast('Logged out');
+      },
+      // Permanently deletes the account server-side, then logs out.
+      resetAll: () => {
+        const currentUid = get().userId;
+        if (currentUid && !currentUid.startsWith('user_client') && !currentUid.startsWith('user_server')) {
+          deleteUserAccount(currentUid).catch(() => {});
+        }
+        get().logout();
+        get().showToast('Account deleted');
       },
     }),
     {
       name: 'triplink_app_storage_v2',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
+        userId: state.userId,
         screen: state.screen,
         tab: state.tab,
         phone: state.phone,
@@ -382,6 +596,7 @@ export const useAppStore = create<AppState>()(
         profile: state.profile,
         trips: state.trips,
         selTripId: state.selTripId,
+        matches: state.matches,
         req: state.req,
         gone: state.gone,
         chats: state.chats,

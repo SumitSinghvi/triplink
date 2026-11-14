@@ -14,7 +14,7 @@ export const ProfileTab: React.FC = () => {
     togglePro,
     openSheet,
     setScreen,
-    resetAll,
+    logout,
     showToast,
   } = useAppStore();
 
@@ -189,7 +189,7 @@ export const ProfileTab: React.FC = () => {
         <button
           type="button"
           className="x-btn x-btn--line"
-          onClick={resetAll}
+          onClick={logout}
         >
           <SvgIcon name="out" size={18} /> Log out
         </button>

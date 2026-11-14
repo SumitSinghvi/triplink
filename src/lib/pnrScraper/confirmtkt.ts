@@ -1,5 +1,6 @@
 import { DecodedPNRResult, maskPNR } from '@/lib/pnr';
 import { TravelClass, BerthPreference } from '@/types';
+import { normalizeTravelDate } from '@/lib/travelDate';
 
 export interface ScrapeConfirmTktResult {
   success: boolean;
@@ -85,12 +86,17 @@ export async function scrapeConfirmTkt(pnr: string): Promise<ScrapeConfirmTktRes
     if (rawStatus.includes('RAC')) status = 'RAC';
     else if (rawStatus.includes('WL')) status = 'WL';
 
+    const travelDate = normalizeTravelDate(raw.Doj);
+    if (!travelDate) {
+      return { success: false, reason: `Unrecognized travel date from railway gateway: ${raw.Doj ?? 'missing'}` };
+    }
+
     const data: DecodedPNRResult = {
       pnr,
       maskedPnr: maskPNR(pnr),
       trainNumber: String(raw.TrainNo).trim(),
       trainName: raw.TrainName,
-      travelDate: raw.Doj || new Date().toISOString().split('T')[0],
+      travelDate,
       fromCode: raw.From || raw.BoardingPoint || '',
       fromName: raw.BoardingStationName || raw.SourceName || raw.From || '',
       toCode: raw.To || raw.ReservationUpto || '',

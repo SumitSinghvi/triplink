@@ -1,13 +1,3 @@
-export type InterestCategory =
-  | 'Tech & AI'
-  | 'Startups & Business'
-  | 'Finance & Crypto'
-  | 'Career & Mentorship'
-  | 'UPSC & Govt Exams'
-  | 'Casual & Chai'
-  | 'Books & Ideas'
-  | 'Travel & Photography';
-
 export type TravelClass = '1A' | '2A' | '3A' | '3E' | 'CC' | 'EC' | 'SL' | '2S';
 
 export type BerthPreference =
@@ -19,21 +9,100 @@ export type BerthPreference =
   | 'Window'
   | 'Aisle';
 
-export interface UserProfile {
+export type TripKind = 'train' | 'flight';
+
+export interface TripVisibility {
+  business: boolean;
+  social: boolean;
+  women: boolean;
+  twoh: boolean;
+}
+
+export interface TripData {
   id: string;
+  kind: TripKind;
   name: string;
-  avatar: string;
-  headline: string;
-  bio: string;
-  role: string;
-  companyOrOrg?: string;
-  interests: InterestCategory[];
-  gender: 'female' | 'male' | 'other' | 'prefer-not-to-say';
-  linkedinUrl?: string;
-  twitterHandle?: string;
-  phoneOrWhatsapp?: string;
-  isVerifiedPNR: boolean;
-  createdAt: string;
+  route: string;
+  when: string;
+  /** Normalized YYYY-MM-DD; source of truth for matching. `when` is display-only. */
+  travelDate?: string;
+  coach?: string;
+  berth?: string;
+  pnrMasked?: string;
+  vis: TripVisibility;
+}
+
+export interface MatchProfile {
+  id: string;
+  tripId: string;
+  type: 'Business' | 'Social';
+  name: string;
+  company: string;
+  industry: string;
+  ini: string;
+  fit?: number;
+  line?: string;
+  tags?: string[];
+  langs?: string;
+  verified?: boolean;
+  coach?: string;
+  bio?: string;
+  cities?: string[];
+  lookingFor?: string[];
+}
+
+export interface ChatMessage {
+  from: 'me' | 'them' | 'sys';
+  text?: string;
+  card?: boolean;
+  timestamp?: string;
+}
+
+export interface UserProfileData {
+  name: string;
+  company: string;
+  industry: string;
+  look: string[];
+  cities: string[];
+  gstin: string;
+  verified: boolean;
+  gstErr: string;
+  first: string;
+  interests: string[];
+  langs: string[];
+}
+
+export interface AddTripModalState {
+  step: 1 | 2;
+  kind: TripKind;
+  pnr: string;
+  flight: string;
+  date: string;
+  found: {
+    kind: TripKind;
+    name: string;
+    route: string;
+    when: string;
+    travelDate: string;
+    coach?: string;
+    berth?: string;
+    pnrMasked?: string;
+  } | null;
+  loading: boolean;
+  err: string;
+  vis: TripVisibility;
+}
+
+export interface IncomingRequestItem {
+  id: string;
+  requesterId: string;
+  name: string;
+  company: string;
+  industry: string;
+  ini: string;
+  fit: number;
+  trainNumber: string;
+  travelDate: string;
 }
 
 export interface TrainInfo {
@@ -46,57 +115,4 @@ export interface TrainInfo {
   departureTime: string;
   arrivalTime: string;
   duration: string;
-}
-
-export interface Trip {
-  id: string;
-  userId: string;
-  trainNumber: string;
-  trainName: string;
-  travelDate: string; // YYYY-MM-DD
-  fromCode: string;
-  fromName: string;
-  toCode: string;
-  toName: string;
-  travelClass: TravelClass;
-  coach?: string; // e.g. "B4", "A1", "C2"
-  berthType?: BerthPreference;
-  pnrHash?: string; // masked, e.g. "******4819"
-  privacyShareCoach: boolean; // whether to show coach to co-travelers
-}
-
-export interface LoungeMessage {
-  id: string;
-  trainNumber: string;
-  travelDate: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar: string;
-  senderHeadline: string;
-  senderCoach?: string;
-  tag: 'general' | 'chai' | 'networking' | 'food' | 'seat-swap';
-  content: string;
-  timestamp: string;
-}
-
-export interface ConnectRequest {
-  id: string;
-  fromUserId: string;
-  toUserId: string;
-  trainNumber: string;
-  travelDate: string;
-  icebreaker: string;
-  customMessage?: string;
-  status: 'pending' | 'accepted' | 'declined';
-  createdAt: string;
-  shareContactOnAccept: boolean;
-}
-
-export interface DirectMessage {
-  id: string;
-  requestId: string;
-  fromUserId: string;
-  toUserId: string;
-  content: string;
-  timestamp: string;
 }

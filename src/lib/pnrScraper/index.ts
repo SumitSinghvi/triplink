@@ -1,4 +1,5 @@
-import { DecodedPNRResult, validatePNR } from '@/lib/pnr';
+import { DecodedPNRResult, validatePNR, maskPNR } from '@/lib/pnr';
+import { DEMO_PRESET_PNRS, getDefaultTravelDate } from '@/lib/mockData';
 import { PnrCache } from './cache';
 import { scrapeConfirmTkt } from './confirmtkt';
 import { scrapeEaseMyTrip } from './easemytrip';
@@ -25,7 +26,30 @@ export async function verifyPNRWaterfall(
     };
   }
 
-  // 1. Check Cache (0 network calls)
+  // 1. Check Demo Presets (Instant for offline / demo testing)
+  const preset = DEMO_PRESET_PNRS.find((p) => p.pnr === cleanPnr);
+  if (preset) {
+    const presetResult: DecodedPNRResult = {
+      pnr: cleanPnr,
+      maskedPnr: maskPNR(cleanPnr),
+      trainNumber: preset.trainNumber,
+      trainName: preset.trainName,
+      travelDate: getDefaultTravelDate(),
+      fromCode: preset.fromCode,
+      fromName: preset.fromName,
+      toCode: preset.toCode,
+      toName: preset.toName,
+      travelClass: preset.travelClass,
+      coach: preset.coach,
+      berthType: preset.berthType,
+      berthNumber: 42,
+      status: 'CONFIRMED',
+      chartPrepared: true,
+    };
+    return { success: true, result: presetResult, source: 'preset' };
+  }
+
+  // 2. Check Cache (0 network calls)
   if (!options.forceFresh) {
     const cached = PnrCache.get(cleanPnr);
     if (cached) {

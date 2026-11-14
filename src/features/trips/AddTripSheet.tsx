@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
+import { DEMO_PRESET_PNRS } from '@/lib/mockData';
 
 export const AddTripSheet: React.FC = () => {
   const { add, closeAddTrip, updateAddTrip, confirmAddTrip } = useAppStore();
@@ -33,7 +34,8 @@ export const AddTripSheet: React.FC = () => {
               kind: 'train',
               name: `${d.trainName} (${d.trainNumber})`,
               route: `${d.fromName || d.fromCode} → ${d.toName || d.toCode}`,
-              when: d.travelDate ? `${d.travelDate}` : 'Today',
+              when: d.travelDate,
+              travelDate: d.travelDate,
               coach: d.coach,
               berth: d.berthNumber ? `Berth ${d.berthNumber} (${d.berthType || 'Confirmed'})` : '',
               pnrMasked: d.maskedPnr,
@@ -52,22 +54,46 @@ export const AddTripSheet: React.FC = () => {
         });
       }
     } else {
-      if (!add.flight.trim()) {
-        updateAddTrip({ err: 'Enter a flight number' });
+      const cleanFlight = add.flight.trim();
+      if (!cleanFlight) {
+        updateAddTrip({ err: 'Enter a flight number (e.g. 6E 214 or AI 887)' });
         return;
       }
       updateAddTrip({ loading: true, err: '' });
-      setTimeout(() => {
+
+      try {
+        const res = await fetch('/api/flights/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ flightNumber: cleanFlight, date: add.date }),
+        });
+        const json = await res.json();
+        if (json && json.success && json.data) {
+          const d = json.data;
+          const fromTerm = d.fromTerminal ? ` (${d.fromTerminal})` : '';
+          const toTerm = d.toTerminal ? ` (${d.toTerminal})` : '';
+          updateAddTrip({
+            loading: false,
+            found: {
+              kind: 'flight',
+              name: `${d.airlineName} ${d.flightNumber}`,
+              route: `${d.fromCity} (${d.fromCode})${fromTerm} → ${d.toCity} (${d.toCode})${toTerm}`,
+              when: `${d.travelDate} · ${d.departureTime} - ${d.arrivalTime} (${d.duration})`,
+              travelDate: d.travelDate,
+            },
+          });
+        } else {
+          updateAddTrip({
+            loading: false,
+            err: json?.error || 'Flight not found. Please check flight number and date.',
+          });
+        }
+      } catch {
         updateAddTrip({
           loading: false,
-          found: {
-            kind: 'flight',
-            name: add.flight.trim().toUpperCase(),
-            route: 'Ahmedabad (AMD) → Mumbai (BOM)',
-            when: add.date || 'Today',
-          },
+          err: 'Flight verification failed. Check network connection.',
         });
-      }, 500);
+      }
     }
   };
 
@@ -193,28 +219,62 @@ export const AddTripSheet: React.FC = () => {
             </div>
 
             {isTrain ? (
-              <label className="x-field">
-                <span>PNR (10 digits)</span>
-                <input
-                  className="x-input"
-                  inputMode="numeric"
-                  maxLength={10}
-                  placeholder="e.g. 8655220078"
-                  value={add.pnr}
-                  onChange={(e) => updateAddTrip({ pnr: e.target.value.replace(/\D/g, ''), found: null, err: '' })}
-                />
-              </label>
+              <>
+                <label className="x-field">
+                  <span>PNR (10 digits)</span>
+                  <input
+                    className="x-input"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="e.g. 8655220078"
+                    value={add.pnr}
+                    onChange={(e) => updateAddTrip({ pnr: e.target.value.replace(/\D/g, ''), found: null, err: '' })}
+                  />
+                </label>
+                <div style={{ marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary,#6b7280)', fontWeight: 600 }}>Demo PNR chips:</span>
+                  <div className="x-chips" style={{ marginTop: '4px', gap: '6px' }}>
+                    {DEMO_PRESET_PNRS.map((p) => (
+                      <button
+                        key={p.pnr}
+                        type="button"
+                        className="x-chip"
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                        onClick={() => updateAddTrip({ pnr: p.pnr, found: null, err: '' })}
+                      >
+                        {p.pnr} ({p.trainName.split(' ')[0]})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 <label className="x-field">
                   <span>Flight number</span>
                   <input
                     className="x-input"
-                    placeholder="e.g. 6E 214"
+                    placeholder="e.g. 6E 214, AI 887, QP 1354"
                     value={add.flight}
                     onChange={(e) => updateAddTrip({ flight: e.target.value, found: null, err: '' })}
                   />
                 </label>
+                <div style={{ marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary,#6b7280)', fontWeight: 600 }}>Popular Flight chips:</span>
+                  <div className="x-chips" style={{ marginTop: '4px', gap: '6px' }}>
+                    {['6E 214', 'AI 887', 'QP 1354'].map((fl) => (
+                      <button
+                        key={fl}
+                        type="button"
+                        className="x-chip"
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                        onClick={() => updateAddTrip({ flight: fl, found: null, err: '' })}
+                      >
+                        {fl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <label className="x-field">
                   <span>Date</span>
                   <input

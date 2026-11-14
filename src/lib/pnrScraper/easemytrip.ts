@@ -1,5 +1,6 @@
 import { DecodedPNRResult, maskPNR } from '@/lib/pnr';
 import { TravelClass, BerthPreference } from '@/types';
+import { normalizeTravelDate } from '@/lib/travelDate';
 
 export async function scrapeEaseMyTrip(pnr: string): Promise<DecodedPNRResult | null> {
   const controller = new AbortController();
@@ -26,6 +27,8 @@ export async function scrapeEaseMyTrip(pnr: string): Promise<DecodedPNRResult | 
     const data = await response.json();
 
     if (!data || !data.TrainNo) return null;
+    const travelDate = normalizeTravelDate(data.Doj);
+    if (!travelDate) return null;
 
     const coach = data.PassengerList?.[0]?.BookingCoachId || 'B1';
     const berthNumber = parseInt(data.PassengerList?.[0]?.BookingBerthNo || '1', 10) || 1;
@@ -42,7 +45,7 @@ export async function scrapeEaseMyTrip(pnr: string): Promise<DecodedPNRResult | 
       maskedPnr: maskPNR(pnr),
       trainNumber: String(data.TrainNo).trim(),
       trainName: data.TrainName || 'Express',
-      travelDate: data.Doj || new Date().toISOString().split('T')[0],
+      travelDate,
       fromCode: data.BoardingStation || data.From,
       fromName: data.BoardingStationName || data.From,
       toCode: data.ReservationUpto || data.To,

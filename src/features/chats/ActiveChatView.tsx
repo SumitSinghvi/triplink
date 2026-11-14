@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 
@@ -19,6 +19,7 @@ export const ActiveChatView: React.FC = () => {
     phone,
     blockPerson,
     openSheet,
+    syncChatMessages,
   } = useAppStore();
 
   const [input, setInput] = useState('');
@@ -26,11 +27,25 @@ export const ActiveChatView: React.FC = () => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const m = matches.find((item) => item.id === activeChatId);
-  const msgs = activeChatId ? chats[activeChatId] || [] : [];
+  const msgs = useMemo(
+    () => (activeChatId ? chats[activeChatId] || [] : []),
+    [chats, activeChatId]
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [msgs, typing]);
+
+  useEffect(() => {
+    if (!activeChatId) return;
+    syncChatMessages(activeChatId).catch(() => {});
+
+    // Poll every 5s instead of Realtime WebSocket (avoids page hang)
+    const interval = setInterval(() => {
+      syncChatMessages(activeChatId).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeChatId, syncChatMessages]);
 
   if (!m) return null;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { OnboardingFlow } from '@/features/onboarding/OnboardingFlow';
 import { TripsTab } from '@/features/trips/TripsTab';
@@ -16,6 +16,13 @@ import { SafetySheet } from '@/features/safety/SafetySheet';
 export default function Home() {
   const screen = useAppStore((s) => s.screen);
   const tab = useAppStore((s) => s.tab);
+  const userId = useAppStore((s) => s.userId);
+  const syncUserRequests = useAppStore((s) => s.syncUserRequests);
+
+  // Load connections/contacts on entry so Chats works without visiting Matches first.
+  useEffect(() => {
+    if (screen === 'main') syncUserRequests().catch(() => {});
+  }, [screen, userId, syncUserRequests]);
 
   return (
     <main className="x-stage">

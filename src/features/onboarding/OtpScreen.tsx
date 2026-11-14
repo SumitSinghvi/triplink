@@ -8,8 +8,12 @@ export const OtpScreen: React.FC = () => {
   const setScreen = useAppStore((s) => s.setScreen);
   const phone = useAppStore((s) => s.phone);
   const showToast = useAppStore((s) => s.showToast);
+  const loginUser = useAppStore((s) => s.loginUser);
 
   const [digits, setDigits] = useState<string[]>(['1', '2', '3', '4']);
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+
   const ref0 = useRef<HTMLInputElement>(null);
   const ref1 = useRef<HTMLInputElement>(null);
   const ref2 = useRef<HTMLInputElement>(null);
@@ -17,15 +21,78 @@ export const OtpScreen: React.FC = () => {
   const refs = [ref0, ref1, ref2, ref3];
 
   useEffect(() => {
-    // Focus first input safely after mount
     const timer = setTimeout(() => {
       ref0.current?.focus();
     }, 50);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleVerify = () => {
-    setScreen('mode');
+  const handleVerify = async () => {
+    const entered = digits.join('').trim();
+    if (entered.length < 4) {
+      showToast('Enter the 4-digit code');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp: entered }),
+      });
+      const data = await res.json();
+
+      if (data?.success) {
+        showToast('Phone verified successfully');
+        if (data.userId) {
+          if (data.profile) {
+            loginUser(data.userId, {
+              name: data.profile.name || '',
+              company: data.profile.company || '',
+              industry: data.profile.industry || 'Textiles',
+              look: data.profile.intent ? [data.profile.intent] : ['Sell'],
+              cities: data.profile.cities || ['Ahmedabad', 'Mumbai'],
+              gstin: data.profile.gstin || '',
+              verified: data.profile.is_verified || false,
+            });
+            setScreen('main');
+          } else {
+            loginUser(data.userId);
+            setScreen('mode');
+          }
+        } else {
+          setScreen('mode');
+        }
+      } else {
+        showToast(data?.error || 'Incorrect OTP. Try demo code 1234.');
+      }
+    } catch {
+      showToast('Verification failed. Try demo code 1234.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (data?.success) {
+        showToast('New OTP sent via SMS');
+      } else {
+        showToast(data?.error || 'Failed to resend OTP');
+      }
+    } catch {
+      showToast('Failed to resend OTP');
+    } finally {
+      setResending(false);
+    }
   };
 
   const handleChange = (index: number, value: string) => {
@@ -80,7 +147,7 @@ export const OtpScreen: React.FC = () => {
       <div className="x-body" style={{ overflowX: 'hidden' }}>
         <p className="x-big">Enter the 4-digit code</p>
         <p className="x-sub">
-          Sent to +91 {phone || 'your mobile'}. Demo OTP <b>1234</b> is pre-filled.
+          Sent to +91 {phone || 'your mobile'}. Enter the code received via SMS.
         </p>
 
         <div
@@ -119,22 +186,31 @@ export const OtpScreen: React.FC = () => {
           ))}
         </div>
 
-        <button
-          type="button"
-          className="x-btn x-btn--sm x-btn--ghost"
-          style={{ justifySelf: 'start', marginTop: '12px' }}
-          onClick={() => {
-            setDigits(['1', '2', '3', '4']);
-            showToast('OTP code 1234 filled');
-          }}
-        >
-          Fill demo code (1234)
-        </button>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+          <button
+            type="button"
+            className="x-btn x-btn--sm x-btn--ghost"
+            disabled={resending}
+            onClick={handleResend}
+          >
+            {resending ? 'Sending...' : 'Resend code'}
+          </button>
+          <button
+            type="button"
+            className="x-btn x-btn--sm x-btn--ghost"
+            onClick={() => {
+              setDigits(['1', '2', '3', '4']);
+              showToast('Demo OTP 1234 filled');
+            }}
+          >
+            Demo code (1234)
+          </button>
+        </div>
       </div>
 
       <div className="x-foot">
-        <button type="button" className="x-btn" onClick={handleVerify}>
-          Verify
+        <button type="button" className="x-btn" disabled={loading} onClick={handleVerify}>
+          {loading ? 'Verifying...' : 'Verify'}
         </button>
       </div>
     </div>

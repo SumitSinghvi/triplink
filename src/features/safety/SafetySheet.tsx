@@ -7,7 +7,7 @@ import { SvgIcon } from '@/shared/icons';
 const REASONS = ['Spam', 'Harassment', 'Fake profile', 'Other'];
 
 export const SafetySheet: React.FC = () => {
-  const { sheet, closeSheet, blockPerson, resetAll, showToast } = useAppStore();
+  const { sheet, closeSheet, reportPerson, resetAll, showToast } = useAppStore();
 
   if (!sheet || sheet.kind === 'detail' || sheet.kind === 'addTrip') return null;
 
@@ -68,7 +68,7 @@ export const SafetySheet: React.FC = () => {
                 type="button"
                 className="x-li"
                 onClick={() => {
-                  if (sheet.id) blockPerson(sheet.id);
+                  if (sheet.id) reportPerson(sheet.id, r);
                   closeSheet();
                   showToast('Thank you. Report received and user blocked.');
                 }}
