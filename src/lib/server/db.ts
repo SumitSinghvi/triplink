@@ -616,6 +616,8 @@ export async function deleteUserAccount(userId: string): Promise<boolean> {
       () => db().from('blocks').delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
       () => db().from('trips').delete().eq('user_id', userId),
       () => db().from('profiles').delete().eq('id', userId),
+      // User ids are usr_<10-digit phone>; drop any pending OTP for that number.
+      () => db().from('auth_otps').delete().eq('phone', userId.replace(/^usr_/, '')),
     ];
     for (const step of steps) {
       const res = await step();

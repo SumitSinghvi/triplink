@@ -102,14 +102,19 @@ export const OtpScreen: React.FC = () => {
   };
 
   const handleChange = (index: number, value: string) => {
-    const clean = value.replace(/\D/g, '').slice(-1);
-    const next = [...digits];
-    next[index] = clean;
-    setDigits(next);
-
-    if (clean && index < 3) {
-      refs[index + 1].current?.focus();
-    }
+    let typed = value.replace(/\D/g, '');
+    // Typing over a filled box gives "old+new": keep the new digit. Longer input is
+    // SMS autofill / fast typing: spread it across this and the following boxes.
+    if (digits[index] && typed.length === 2) typed = typed.slice(-1);
+    typed = typed.slice(0, 4 - index);
+    // Functional update: rapid change events must not overwrite each other's digits.
+    setDigits((prev) => {
+      const next = [...prev];
+      if (!typed) next[index] = '';
+      typed.split('').forEach((c, i) => (next[index + i] = c));
+      return next;
+    });
+    if (typed) refs[Math.min(index + typed.length, 3)].current?.focus();
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -175,7 +180,6 @@ export const OtpScreen: React.FC = () => {
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              maxLength={1}
               aria-label={`Digit ${i + 1}`}
               value={d}
               onChange={(e) => handleChange(i, e.target.value)}

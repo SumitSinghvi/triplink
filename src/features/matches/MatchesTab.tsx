@@ -251,7 +251,7 @@ export const MatchesTab: React.FC = () => {
           })
         ) : (
           <div className="x-empty" style={{ padding: '32px 16px', textAlign: 'center' }}>
-            <b>No {filter.toLowerCase()} matches yet</b>
+            <b>No {filter === 'All' ? '' : `${filter.toLowerCase()} `}matches yet</b>
             <p style={{ color: 'var(--text-secondary,#6b7280)', fontSize: '13px', marginTop: '6px' }}>
               Matches will appear when other passengers on this train opt in.
             </p>
