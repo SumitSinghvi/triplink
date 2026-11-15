@@ -28,12 +28,6 @@ export const MatchDetailSheet: React.FC = () => {
           <span className="x-m__name">
             <b>{m.name}</b>
             <small>{m.company}</small>
-            {m.verified && (
-              <span className="x-ver">
-                <SvgIcon name="seal" size={16} width={0} />
-                GSTIN added
-              </span>
-            )}
             {m.ticketVerified && (
               <span className="x-ver">
                 <SvgIcon name="seal" size={16} width={0} />

@@ -215,12 +215,6 @@ export const MatchesTab: React.FC = () => {
                         {t}
                       </span>
                     ))}
-                    {m.verified && (
-                      <span className="x-ver">
-                        <SvgIcon name="seal" size={16} width={0} />
-                        GSTIN
-                      </span>
-                    )}
                     {m.ticketVerified && (
                       <span className="x-ver">
                         <SvgIcon name="seal" size={16} width={0} />

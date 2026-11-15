@@ -160,7 +160,6 @@ export interface AppState {
   setFullOtp: (otpArr: string[]) => void;
   toggleMode: (m: 'business' | 'social') => void;
   updateProfileField: <K extends keyof UserProfileData>(k: K, v: UserProfileData[K]) => void;
-  verifyGstin: () => void;
   saveProfileAndEnter: () => void;
 
   // Trips & Matches
@@ -274,31 +273,7 @@ export const useAppStore = create<AppState>()(
         if (screen === 'main') syncUserProfile(profile, modes);
       },
       updateProfileField: (k, v) =>
-        set((state) => ({
-          // Changing the GSTIN invalidates the previous format check.
-          profile:
-            k === 'gstin' && v !== state.profile.gstin
-              ? { ...state.profile, gstin: v as string, verified: false, gstErr: '' }
-              : { ...state.profile, [k]: v },
-        })),
-      verifyGstin: () => {
-        const { gstin } = get().profile;
-        const clean = gstin.trim().toUpperCase();
-        if (/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(clean)) {
-          set((state) => ({
-            profile: { ...state.profile, gstin: clean, verified: true, gstErr: '' },
-          }));
-          get().showToast('GSTIN format is valid');
-        } else {
-          set((state) => ({
-            profile: {
-              ...state.profile,
-              verified: false,
-              gstErr: 'Invalid 15-character GSTIN format (e.g. 24AAACH7409R1ZZ)',
-            },
-          }));
-        }
-      },
+        set((state) => ({ profile: { ...state.profile, [k]: v } })),
       saveProfileAndEnter: () => {
         const { profile, modes } = get();
         syncUserProfile(profile, modes);

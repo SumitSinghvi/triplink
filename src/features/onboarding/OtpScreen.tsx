@@ -53,8 +53,6 @@ export const OtpScreen: React.FC = () => {
               industry: data.profile.industry || 'Textiles',
               look: data.profile.intent ? [data.profile.intent] : ['Sell'],
               cities: data.profile.cities || ['Ahmedabad', 'Mumbai'],
-              gstin: data.profile.gstin || '',
-              verified: data.profile.is_verified || false,
               first: data.profile.first_name || '',
               interests: data.profile.interests || [],
               langs: data.profile.langs || [],

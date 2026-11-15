@@ -50,7 +50,6 @@ export interface MatchProfile {
   line?: string;
   tags?: string[];
   langs?: string;
-  verified?: boolean;
   /** Their trip is backed by a scanned boarding pass. */
   ticketVerified?: boolean;
   coach?: string;
@@ -75,9 +74,6 @@ export interface UserProfileData {
   industry: string;
   look: string[];
   cities: string[];
-  gstin: string;
-  verified: boolean;
-  gstErr: string;
   first: string;
   interests: string[];
   langs: string[];

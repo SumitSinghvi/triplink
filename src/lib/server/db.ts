@@ -100,8 +100,6 @@ export async function syncUserProfile(
       industry: profile.industry || null,
       intent: profile.look && profile.look.length > 0 ? profile.look[0] : 'Partner',
       cities: profile.cities || [],
-      gstin: profile.gstin || null,
-      is_verified: profile.verified || false,
     });
 
     if (error) {
@@ -318,7 +316,6 @@ export async function fetchLiveCoTravelers(
         industry: 'General',
         intent: 'Connect',
         cities: [],
-        is_verified: false,
       };
 
       const displayName = p.name || p.first_name || 'Traveler';
@@ -341,7 +338,6 @@ export async function fetchLiveCoTravelers(
       if (isSameIndustry) fitScore += 12;
       if (proximity.isSameCoach) fitScore += 6;
       else if (proximity.isAdjacentCoach) fitScore += 3;
-      if (p.is_verified) fitScore += 2;
       fitScore = Math.min(98, fitScore);
 
       const statusLine = isCorridorMatch
@@ -363,7 +359,6 @@ export async function fetchLiveCoTravelers(
         line: statusLine,
         tags: p.interests?.length ? p.interests : p.industry ? [p.industry] : ['Traveler'],
         langs: p.langs?.length ? p.langs.join(', ') : undefined,
-        verified: p.is_verified || false,
         ticketVerified: t.ticket_verified || false,
         cities: p.cities || undefined,
         lookingFor: p.intent ? [p.intent] : ['Partner'],
@@ -543,7 +538,6 @@ export async function fetchUserRequestsAndMatches(userId: string): Promise<{
         company: p?.company || 'Co-Passenger',
         industry: p?.industry || 'General',
         ini: initialsOf(name, 'TR'),
-        verified: p?.is_verified || false,
         cities: p?.cities || undefined,
         lookingFor: p?.intent ? [p.intent] : undefined,
         tags: p?.interests?.length ? p.interests : undefined,

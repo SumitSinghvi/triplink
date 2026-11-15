@@ -34,12 +34,6 @@ export const SafetySheet: React.FC = () => {
             </div>
             <div className="x-li">
               <span className="x-li__main">
-                <b>GST-registered profiles</b>
-                <small>The GSTIN badge means a valid-format GSTIN was added. It is not checked with the GST portal.</small>
-              </span>
-            </div>
-            <div className="x-li">
-              <span className="x-li__main">
                 <b>Railway helpline 139</b>
                 <small>Available 24x7 for security and passenger assistance.</small>
               </span>

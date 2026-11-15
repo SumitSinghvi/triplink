@@ -16,7 +16,6 @@ export const ProfileSetupScreen: React.FC = () => {
     modes,
     profile,
     updateProfileField,
-    verifyGstin,
     saveProfileAndEnter,
   } = useAppStore();
 
@@ -121,35 +120,6 @@ export const ProfileSetupScreen: React.FC = () => {
                   );
                 })}
               </div>
-            </div>
-            <div className="x-field">
-              <span>GSTIN (optional)</span>
-              <div className="x-inline">
-                <input
-                  className="x-input"
-                  placeholder="15-character GSTIN"
-                  aria-label="GSTIN"
-                  value={profile.gstin}
-                  onChange={(e) => updateProfileField('gstin', e.target.value.toUpperCase())}
-                />
-                {!profile.verified && (
-                  <button
-                    type="button"
-                    className="x-btn x-btn--sm"
-                    onClick={verifyGstin}
-                  >
-                    Check
-                  </button>
-                )}
-              </div>
-              {profile.verified ? (
-                <span className="x-ver">
-                  <SvgIcon name="seal" size={16} width={0} />
-                  GSTIN format valid
-                </span>
-              ) : profile.gstErr ? (
-                <span className="x-err">{profile.gstErr}</span>
-              ) : null}
             </div>
           </>
         )}

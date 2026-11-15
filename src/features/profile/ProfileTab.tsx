@@ -44,13 +44,6 @@ export const ProfileTab: React.FC = () => {
             <span className="x-m__name">
               <b>{displayName}</b>
               <small>{subtitle}</small>
-              {profile.verified ? (
-                <span className="x-ver">
-                  <SvgIcon name="seal" size={16} width={0} /> GSTIN added
-                </span>
-              ) : (
-                <small style={{ color: 'var(--text-secondary,#6b7280)' }}>No GSTIN added</small>
-              )}
             </span>
           </div>
 
@@ -76,16 +69,6 @@ export const ProfileTab: React.FC = () => {
             >
               Edit profile
             </button>
-            {!profile.verified && (
-              <button
-                type="button"
-                className="x-btn x-btn--sm"
-                style={{ width: '100%' }}
-                onClick={() => setScreen('create')}
-              >
-                Verify GSTIN
-              </button>
-            )}
           </div>
         </div>
 
