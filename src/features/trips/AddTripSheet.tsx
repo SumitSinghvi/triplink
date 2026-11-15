@@ -8,6 +8,7 @@ import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
 import { todayIso } from '@/lib/travelDate';
 import { readBoardingPassBarcode } from '@/lib/boardingPassScan';
 import { lookupFlight, type FoundTrip } from '@/lib/flightLookup';
+import { PassPicker } from './PassPicker';
 
 export const AddTripSheet: React.FC = () => {
   const { add, closeAddTrip, updateAddTrip, confirmAddTrip, profile } = useAppStore();
@@ -349,21 +350,12 @@ export const AddTripSheet: React.FC = () => {
                   </div>
                 )}
                 {!add.found && (
-                  <label className="x-btn x-btn--line" style={{ marginTop: '10px', cursor: add.loading ? 'default' : 'pointer' }}>
-                    <SvgIcon name="seal" size={18} width={0} />
-                    Scan boarding pass (verified)
-                    <input
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      disabled={add.loading}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = ''; // same file can be picked again
-                        if (f) handleScan(f);
-                      }}
-                    />
-                  </label>
+                  <PassPicker
+                    label="Scan boarding pass"
+                    disabled={add.loading}
+                    style={{ marginTop: '10px' }}
+                    onFile={handleScan}
+                  />
                 )}
               </>
             )}

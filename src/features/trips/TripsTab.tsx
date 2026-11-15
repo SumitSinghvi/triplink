@@ -7,6 +7,7 @@ import { extractJourneyKey, isPastTrip, tripTravelDate } from '@/lib/supabaseSyn
 import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
 import { readBoardingPassBarcode } from '@/lib/boardingPassScan';
 import { isCancelled, isDelayed } from '@/lib/flightLookup';
+import { PassPicker } from './PassPicker';
 
 export const TripsTab: React.FC = () => {
   const { trips, openAddTrip, selectTrip, matches, gone, profile, verifyTrip, showToast, refreshFlightTrip } =
@@ -97,24 +98,13 @@ export const TripsTab: React.FC = () => {
         </span>
       </button>
       {t.kind === 'flight' && !t.ticketVerified && !isPastTrip(t) && !isCancelled(t.flightStatus) && (
-        <label
-          className="x-btn x-btn--line x-btn--sm"
-          style={{ cursor: verifying ? 'default' : 'pointer', marginTop: '-4px' }}
-        >
-          <SvgIcon name="seal" size={16} width={0} />
-          {verifying === t.id ? 'Checking boarding pass...' : 'Verify with boarding pass'}
-          <input
-            type="file"
-            accept="image/*"
-            hidden
-            disabled={!!verifying}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = ''; // same file can be picked again
-              if (f) handleVerify(t, f);
-            }}
-          />
-        </label>
+        <PassPicker
+          small
+          label={verifying === t.id ? 'Checking boarding pass...' : 'Verify with boarding pass'}
+          disabled={!!verifying}
+          style={{ marginTop: '-4px' }}
+          onFile={(f) => handleVerify(t, f)}
+        />
       )}
     </React.Fragment>
   );
