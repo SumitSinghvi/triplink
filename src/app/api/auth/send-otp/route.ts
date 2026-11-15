@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveOtp, DEMO_OTP_ALLOWED } from '@/lib/otpStore';
+import { saveOtp } from '@/lib/otpStore';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,17 +22,11 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.FAST2SMS_API_KEY;
     if (!apiKey) {
-      if (!DEMO_OTP_ALLOWED) {
-        return NextResponse.json(
-          { success: false, error: 'SMS service is not configured. Please try again later.' },
-          { status: 503 }
-        );
-      }
-      // Dev mode without key: generated OTP returned in response (demo 1234 also accepted)
+      // No SMS provider yet: demo code 1234 is accepted. Never echo the generated OTP in production.
       return NextResponse.json({
         success: true,
-        message: 'Dev mode: OTP saved',
-        devOtp: generatedOtp,
+        message: 'Demo mode: enter code 1234',
+        ...(process.env.NODE_ENV !== 'production' && { devOtp: generatedOtp }),
       });
     }
 

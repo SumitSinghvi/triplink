@@ -7,8 +7,9 @@ interface OtpEntry {
   expiresAt: number;
 }
 
-// Demo code 1234 works only outside production builds (local dev / previews).
-export const DEMO_OTP_ALLOWED = process.env.NODE_ENV !== 'production';
+// Demo code 1234 works in dev, and in production until an SMS provider key is configured.
+// ponytail: anyone can log in as any number while this is on; adding FAST2SMS_API_KEY turns it off.
+export const DEMO_OTP_ALLOWED = process.env.NODE_ENV !== 'production' || !process.env.FAST2SMS_API_KEY;
 
 // In-memory fallback
 const fallbackOtpStore = new Map<string, OtpEntry>();
