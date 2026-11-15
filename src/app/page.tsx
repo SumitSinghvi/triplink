@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
+import { setUnauthorizedHandler } from '@/lib/supabaseSync';
 import { OnboardingFlow } from '@/features/onboarding/OnboardingFlow';
 import { TripsTab } from '@/features/trips/TripsTab';
 import { MatchesTab } from '@/features/matches/MatchesTab';
@@ -19,6 +20,17 @@ export default function Home() {
   const userId = useAppStore((s) => s.userId);
   const syncUserRequests = useAppStore((s) => s.syncUserRequests);
   const syncChatMessages = useAppStore((s) => s.syncChatMessages);
+
+  // Server session missing/expired while the app thinks it's signed in -> sign out cleanly.
+  useEffect(() => {
+    if (screen !== 'main') return;
+    setUnauthorizedHandler(() => {
+      setUnauthorizedHandler(null);
+      useAppStore.getState().logout();
+      useAppStore.getState().showToast('Session expired. Please log in again.');
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [screen]);
 
   // App-wide polling: connections/requests, plus background chats for unread badges.
   // The open chat polls itself faster in ActiveChatView.

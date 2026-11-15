@@ -29,6 +29,7 @@ import {
   fetchUserTrips,
   tripKey,
   newMessageId,
+  endServerSession,
 } from '@/lib/supabaseSync';
 import { mergeChat, countNewIncoming } from '@/lib/chatMerge';
 import { todayIso } from '@/lib/travelDate';
@@ -245,7 +246,7 @@ export const useAppStore = create<AppState>()(
         });
 
         // Pull this account's trips from Supabase (new device / re-login).
-        fetchUserTrips(userId).then((remote) => {
+        fetchUserTrips().then((remote) => {
           if (get().userId !== userId || remote.length === 0) return;
           set((state) => {
             const seen = new Set(state.trips.map(tripKey));
@@ -269,8 +270,8 @@ export const useAppStore = create<AppState>()(
           modes: { ...state.modes, [m]: !state.modes[m] },
         }));
         // Mode changes from the Profile tab apply immediately; onboarding syncs on save.
-        const { screen, userId, profile, modes } = get();
-        if (screen === 'main') syncUserProfile(userId, profile, modes);
+        const { screen, profile, modes } = get();
+        if (screen === 'main') syncUserProfile(profile, modes);
       },
       updateProfileField: (k, v) =>
         set((state) => ({
@@ -299,8 +300,8 @@ export const useAppStore = create<AppState>()(
         }
       },
       saveProfileAndEnter: () => {
-        const { userId, profile, modes } = get();
-        syncUserProfile(userId, profile, modes);
+        const { profile, modes } = get();
+        syncUserProfile(profile, modes);
         set({ screen: 'main', tab: 'trips' });
         get().showToast('Profile Saved');
       },
@@ -354,10 +355,10 @@ export const useAppStore = create<AppState>()(
           tab: 'trips',
         }));
 
-        const { userId, profile, modes } = get();
+        const { profile, modes } = get();
         // trips.user_id references profiles: the profile row must exist before the trip insert.
-        syncUserProfile(userId, profile, modes).then(() => syncUserTrip(userId, newTrip));
-        fetchLiveCoTravelers(newTrip, userId, profile.industry).then((coTravelers) => {
+        syncUserProfile(profile, modes).then(() => syncUserTrip(newTrip));
+        fetchLiveCoTravelers(newTrip, profile.industry).then((coTravelers) => {
           set((state) => ({ matches: withTripMatches(state.matches, newId, coTravelers) }));
         });
 
@@ -373,13 +374,13 @@ export const useAppStore = create<AppState>()(
         const targetId = tripId || get().selTripId;
         const trip = get().trips.find((t) => t.id === targetId);
         if (!trip) return;
-        const { userId, profile } = get();
-        const coTravelers = await fetchLiveCoTravelers(trip, userId, profile.industry);
+        const { profile } = get();
+        const coTravelers = await fetchLiveCoTravelers(trip, profile.industry);
         set((state) => ({ matches: withTripMatches(state.matches, trip.id, coTravelers) }));
       },
       syncUserRequests: async () => {
         const { userId } = get();
-        const { incoming, reqStatus, contacts } = await fetchUserRequestsAndMatches(userId);
+        const { incoming, reqStatus, contacts } = await fetchUserRequestsAndMatches();
         if (get().userId !== userId) return; // logged out / switched meanwhile
         set((state) => {
           // Keep trip-scoped match entries; add accepted contacts not otherwise known so chats render.
@@ -447,7 +448,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({ req: { ...state.req, [matchId]: 'sent' } }));
 
         const receiverId = match.id.replace(/^match_/, '');
-        sendConnectionRequest(get().userId, receiverId, trip, match.fit).then((status) => {
+        sendConnectionRequest(receiverId, trip, match.fit).then((status) => {
           set((state) => {
             const req = { ...state.req };
             if (status) req[matchId] = status;
@@ -474,9 +475,8 @@ export const useAppStore = create<AppState>()(
         });
       },
       blockPerson: (matchId) => {
-        const { userId } = get();
         const otherUserId = matchId.replace(/^match_/, '');
-        blockUserInSupabase(userId, otherUserId);
+        blockUserInSupabase(otherUserId);
 
         set((state) => {
           const newReq = { ...state.req };
@@ -498,9 +498,8 @@ export const useAppStore = create<AppState>()(
         get().showToast('User blocked and removed');
       },
       reportPerson: (matchId, reason, details) => {
-        const { userId } = get();
         const otherUserId = matchId.replace(/^match_/, '');
-        reportUserInSupabase(userId, otherUserId, reason, details);
+        reportUserInSupabase(otherUserId, reason, details);
         get().blockPerson(matchId);
       },
 
@@ -520,7 +519,7 @@ export const useAppStore = create<AppState>()(
       closeChat: () => set({ activeChatId: null }),
       syncChatMessages: async (matchId) => {
         const { userId } = get();
-        const liveMsgs = await fetchLiveChatMessages(matchId, userId);
+        const liveMsgs = await fetchLiveChatMessages(matchId);
         // Empty = no history or fetch error: keep local rather than wipe it.
         if (liveMsgs.length === 0 || get().userId !== userId) return;
         set((state) => {
@@ -541,7 +540,6 @@ export const useAppStore = create<AppState>()(
         if (!id || !text.trim()) return;
 
         const clean = text.trim();
-        const { userId } = get();
         const msgId = newMessageId();
 
         set((state) => {
@@ -554,7 +552,7 @@ export const useAppStore = create<AppState>()(
           };
         });
 
-        sendChatMessageToSupabase(id, userId, clean, false, msgId).then((ok) => {
+        sendChatMessageToSupabase(id, clean, false, msgId).then((ok) => {
           set((state) => ({ chats: withDelivery(state.chats, id, msgId, ok) }));
           if (!ok) get().showToast('Message not delivered. Check connection.');
         });
@@ -562,7 +560,6 @@ export const useAppStore = create<AppState>()(
       shareBusinessCard: () => {
         const id = get().activeChatId;
         if (!id) return;
-        const { userId } = get();
         const msgId = newMessageId();
         set((state) => {
           const current = state.chats[id] || [];
@@ -573,7 +570,7 @@ export const useAppStore = create<AppState>()(
             },
           };
         });
-        sendChatMessageToSupabase(id, userId, 'Shared business card', true, msgId).then((ok) => {
+        sendChatMessageToSupabase(id, 'Shared business card', true, msgId).then((ok) => {
           set((state) => ({ chats: withDelivery(state.chats, id, msgId, ok) }));
           if (!ok) get().showToast('Business card not delivered. Check connection.');
         });
@@ -596,6 +593,7 @@ export const useAppStore = create<AppState>()(
       },
       // Clears this device only. Server data stays so the user can log back in.
       logout: () => {
+        endServerSession();
         set({
           ...blankUserData(),
           userId: newAnonUserId(),
@@ -613,7 +611,7 @@ export const useAppStore = create<AppState>()(
         const currentUid = get().userId;
         if (currentUid && !currentUid.startsWith('user_client') && !currentUid.startsWith('user_server')) {
           // Keep the user signed in if deletion fails, so they can retry.
-          if (!(await deleteUserAccount(currentUid))) {
+          if (!(await deleteUserAccount())) {
             get().showToast('Could not delete account. Try again.');
             return;
           }

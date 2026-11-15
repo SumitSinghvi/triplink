@@ -1,4 +1,6 @@
-import { supabase } from './supabase';
+import { supabaseAdmin } from './server/supabaseAdmin';
+
+const supabase = () => supabaseAdmin();
 
 interface OtpEntry {
   otp: string;
@@ -22,7 +24,7 @@ export async function saveOtp(phone: string, otp: string, ttlSeconds = 300): Pro
   });
 
   try {
-    const { error } = await supabase.from('auth_otps').upsert({
+    const { error } = await supabase().from('auth_otps').upsert({
       phone: clean,
       otp_hash: otp,
       expires_at: expiresAt,
@@ -52,7 +54,7 @@ export async function verifyOtp(
   // 1. Try Supabase persistent OTP store. If Supabase answers, it is authoritative
   //    (no fallback that would skip its expiry/attempt limits).
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabase()
       .from('auth_otps')
       .select('*')
       .eq('phone', clean)
@@ -66,23 +68,23 @@ export async function verifyOtp(
       const expiresAt = new Date(data.expires_at).getTime();
 
       if (now > expiresAt) {
-        await supabase.from('auth_otps').delete().eq('phone', clean);
+        await supabase().from('auth_otps').delete().eq('phone', clean);
         return { valid: false, reason: 'OTP has expired' };
       }
 
       if (data.attempts >= 5) {
-        await supabase.from('auth_otps').delete().eq('phone', clean);
+        await supabase().from('auth_otps').delete().eq('phone', clean);
         return { valid: false, reason: 'Too many incorrect attempts. Please request a new OTP.' };
       }
 
       if (data.otp_hash === cleanInput) {
         // Successful verification -> delete OTP
-        await supabase.from('auth_otps').delete().eq('phone', clean);
+        await supabase().from('auth_otps').delete().eq('phone', clean);
         fallbackOtpStore.delete(clean);
         return { valid: true };
       } else {
         // Increment attempt counter
-        await supabase
+        await supabase()
           .from('auth_otps')
           .update({ attempts: (data.attempts || 0) + 1 })
           .eq('phone', clean);

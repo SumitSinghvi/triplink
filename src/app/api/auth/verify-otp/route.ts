@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOtp } from '@/lib/otpStore';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/server/supabaseAdmin';
+import { setSession } from '@/lib/server/session';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function POST(req: NextRequest) {
     const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
     const cleanOtp = (otp || '').trim();
 
-    if (!cleanPhone || !cleanOtp) {
+    if (cleanPhone.length !== 10 || !cleanOtp) {
       return NextResponse.json(
         { success: false, error: 'Phone and OTP are required' },
         { status: 400 }
@@ -22,11 +23,14 @@ export async function POST(req: NextRequest) {
       const userId = `usr_${cleanPhone}`;
 
       // Check if user already has a profile
-      const { data: existingProfile } = await supabase
+      const { data: existingProfile } = await supabaseAdmin()
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
+
+      // Signed httpOnly cookie: all data access (/api/db) is tied to this user id.
+      await setSession(userId);
 
       return NextResponse.json({
         success: true,
