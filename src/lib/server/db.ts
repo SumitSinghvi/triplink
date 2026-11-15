@@ -4,6 +4,7 @@ import type { MatchProfile, TripData, UserProfileData } from '@/types';
 import { supabaseAdmin } from './supabaseAdmin';
 import { todayIso } from '@/lib/travelDate';
 import { canSee, showFromFor } from '@/lib/tripVisibility';
+import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
 import {
   type IncomingRequestItem,
   buildDeterministicMatchId,
@@ -36,6 +37,33 @@ export function hasV2Schema(): Promise<boolean> {
     return false;
   })();
   return v2Schema;
+}
+
+// trips.ticket_verified comes from supabase/migrations/20261116000000_*.sql; same probe-once pattern.
+let ticketColumn: Promise<boolean> | null = null;
+function hasTicketColumn(): Promise<boolean> {
+  ticketColumn ??= (async () => {
+    const { error } = await db().from('trips').select('ticket_verified').limit(1);
+    if (!error) return true;
+    if (error.code === '42703' || /does not exist|schema cache/i.test(error.message)) return false;
+    ticketColumn = null; // network/other error: retry next call
+    return false;
+  })();
+  return ticketColumn;
+}
+
+// A boarding pass verifies a trip only when its barcode names this flight, this date and this user.
+// ponytail: unsigned BCBP text can be forged by a determined user; upgrade = airline-signed BCBP or a
+// check-in API. Raw barcode (name, PNR) is used here only and never stored.
+async function boardingPassVerifies(userId: string, raw: string, journeyKey: string, travelDate: string) {
+  const pass = parseBcbp(raw);
+  if (!pass) return false;
+  const legOk = pass.legs.some(
+    (l) => `${l.carrier}${l.flightNumber}` === journeyKey && julianToIso(l.julianDay, travelDate) === travelDate
+  );
+  if (!legOk) return false;
+  const { data } = await db().from('profiles').select('name').eq('id', userId).maybeSingle();
+  return !!data?.name && nameMatches(pass.passengerName, data.name);
 }
 
 // Visibility for rows from either schema: legacy rows only have `mode`.
@@ -88,7 +116,7 @@ export async function syncUserProfile(
 }
 
 // 2. Sync Added Journey (Train or Flight) to Supabase
-export async function syncUserTrip(userId: string, trip: TripData): Promise<boolean> {
+export async function syncUserTrip(userId: string, trip: TripData, boardingPass?: string): Promise<boolean> {
   try {
     const cleanNumber = extractJourneyKey(trip.name);
 
@@ -110,6 +138,13 @@ export async function syncUserTrip(userId: string, trip: TripData): Promise<bool
           to_station: trip.toCode?.toUpperCase() || null,
         }
       : {};
+    // Only ever set true: a later re-sync without a pass must not un-verify the trip.
+    const verified =
+      boardingPass &&
+      (await hasTicketColumn()) &&
+      (await boardingPassVerifies(userId, boardingPass, cleanNumber, travelDate))
+        ? { ticket_verified: true }
+        : {};
 
     const { error } = await db().from('trips').upsert({
       id: tripId,
@@ -123,6 +158,7 @@ export async function syncUserTrip(userId: string, trip: TripData): Promise<bool
       // Legacy single-mode label; also the visibility source until the migration runs.
       mode: trip.vis.social && !trip.vis.business ? 'social' : 'business',
       ...v2,
+      ...verified,
     });
 
     if (error) {
@@ -142,9 +178,10 @@ export async function fetchUserTrips(userId: string): Promise<TripData[]> {
     const columns: string = (await hasV2Schema())
       ? 'id, train_number, train_name, travel_date, from_code, to_code, coach, mode, visible_business, visible_social, show_from, from_station, to_station'
       : 'id, train_number, train_name, travel_date, from_code, to_code, coach, mode';
+    const withTicket = (await hasTicketColumn()) ? `${columns}, ticket_verified` : columns;
     const { data, error } = await db()
       .from('trips')
-      .select(columns)
+      .select(withTicket)
       .eq('user_id', userId)
       .gte('travel_date', todayIso())
       .order('travel_date');
@@ -159,6 +196,7 @@ export async function fetchUserTrips(userId: string): Promise<TripData[]> {
       fromCode: t.from_station || undefined,
       toCode: t.to_station || undefined,
       coach: t.coach || undefined,
+      ticketVerified: t.ticket_verified || undefined,
       vis: {
         business: t.visible_business,
         social: t.visible_social,
@@ -187,6 +225,7 @@ interface TripRow {
   visible_business?: boolean | null;
   visible_social?: boolean | null;
   show_from?: string | null;
+  ticket_verified?: boolean | null;
   from_station?: string | null;
   to_station?: string | null;
 }
@@ -204,7 +243,8 @@ export async function fetchLiveCoTravelers(
     if (!travelDate) return [];
 
     const v2 = await hasV2Schema();
-    const columns: string = v2 ? TRIP_MATCH_COLUMNS : TRIP_MATCH_COLUMNS_LEGACY;
+    const columns: string =
+      (v2 ? TRIP_MATCH_COLUMNS : TRIP_MATCH_COLUMNS_LEGACY) + ((await hasTicketColumn()) ? ', ticket_verified' : '');
 
     // 1. Query trips table for matching journey number + travel date
     const { data: initialTrips, error: tripErr } = await db()
@@ -324,6 +364,7 @@ export async function fetchLiveCoTravelers(
         tags: p.interests?.length ? p.interests : p.industry ? [p.industry] : ['Traveler'],
         langs: p.langs?.length ? p.langs.join(', ') : undefined,
         verified: p.is_verified || false,
+        ticketVerified: t.ticket_verified || false,
         cities: p.cities || undefined,
         lookingFor: p.intent ? [p.intent] : ['Partner'],
       };

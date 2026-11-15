@@ -43,7 +43,8 @@ async function call<T>(action: string, args: unknown[], fallback: T): Promise<T>
 export const syncUserProfile = (profile: UserProfileData, modes?: { business: boolean; social: boolean }) =>
   call<boolean>('syncProfile', [profile, modes], false);
 
-export const syncUserTrip = (trip: TripData) => call<boolean>('syncTrip', [trip], false);
+export const syncUserTrip = (trip: TripData, boardingPass?: string) =>
+  call<boolean>('syncTrip', [trip, boardingPass], false);
 
 export const fetchUserTrips = () => call<TripData[]>('myTrips', [], []);
 

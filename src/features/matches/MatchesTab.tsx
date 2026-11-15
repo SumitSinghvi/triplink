@@ -221,6 +221,12 @@ export const MatchesTab: React.FC = () => {
                         GSTIN
                       </span>
                     )}
+                    {m.ticketVerified && (
+                      <span className="x-ver">
+                        <SvgIcon name="seal" size={16} width={0} />
+                        Ticket
+                      </span>
+                    )}
                   </span>
 
                   <div

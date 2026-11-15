@@ -314,6 +314,9 @@ export const useAppStore = create<AppState>()(
             pnr: '',
             flight: '',
             date: todayIso(),
+            manual: false,
+            manualFrom: '',
+            manualTo: '',
             found: null,
             loading: false,
             err: '',
@@ -342,6 +345,7 @@ export const useAppStore = create<AppState>()(
           coach: add.found.coach,
           berth: add.found.berth,
           pnrMasked: add.found.pnrMasked,
+          ticketVerified: add.found.ticketVerified,
           vis: {
             business: add.vis.business,
             social: add.vis.social,
@@ -357,7 +361,7 @@ export const useAppStore = create<AppState>()(
 
         const { profile, modes } = get();
         // trips.user_id references profiles: the profile row must exist before the trip insert.
-        syncUserProfile(profile, modes).then(() => syncUserTrip(newTrip));
+        syncUserProfile(profile, modes).then(() => syncUserTrip(newTrip, add.found?.boardingPass));
         fetchLiveCoTravelers(newTrip, profile.industry).then((coTravelers) => {
           set((state) => ({ matches: withTripMatches(state.matches, newId, coTravelers) }));
         });

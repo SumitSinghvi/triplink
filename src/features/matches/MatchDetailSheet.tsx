@@ -34,6 +34,12 @@ export const MatchDetailSheet: React.FC = () => {
                 GSTIN added
               </span>
             )}
+            {m.ticketVerified && (
+              <span className="x-ver">
+                <SvgIcon name="seal" size={16} width={0} />
+                Boarding pass verified
+              </span>
+            )}
           </span>
         </div>
 

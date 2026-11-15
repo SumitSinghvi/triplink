@@ -92,7 +92,7 @@ function modes(v: unknown): { business: boolean; social: boolean } | undefined {
 // action -> handler(me, args). `me` is the session user; args are untrusted.
 const ACTIONS: Record<string, (me: string, a: unknown[]) => Promise<unknown>> = {
   syncProfile: (me, a) => dbApi.syncUserProfile(me, profile(a[0]), modes(a[1])),
-  syncTrip: (me, a) => dbApi.syncUserTrip(me, trip(a[0])),
+  syncTrip: (me, a) => dbApi.syncUserTrip(me, trip(a[0]), optStr(a[1], 1000)),
   myTrips: (me) => dbApi.fetchUserTrips(me),
   coTravelers: (me, a) => dbApi.fetchLiveCoTravelers(trip(a[0]), me, optStr(a[1], 60)),
   sendRequest: (me, a) => {

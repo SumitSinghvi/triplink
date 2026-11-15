@@ -4,11 +4,133 @@ import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 import { DEMO_PRESET_PNRS } from '@/lib/mockData';
+import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
+import { todayIso } from '@/lib/travelDate';
+import type { AddTripModalState } from '@/types';
+
+type FoundTrip = NonNullable<AddTripModalState['found']>;
+type FlightLookup = { ok: true; found: FoundTrip } | { ok: false; status: number; error?: string };
+
+// Server flight lookup (AeroDataBox). 404 = unknown flight -> manual entry is offered.
+async function lookupFlight(flightNumber: string, date: string): Promise<FlightLookup> {
+  const res = await fetch('/api/flights/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flightNumber, date }),
+  });
+  const json = await res.json();
+  if (!json?.success || !json.data) return { ok: false, status: res.status, error: json?.error };
+  const d = json.data;
+  const fromTerm = d.fromTerminal ? ` (${d.fromTerminal})` : '';
+  const toTerm = d.toTerminal ? ` (${d.toTerminal})` : '';
+  return {
+    ok: true,
+    found: {
+      kind: 'flight',
+      name: `${d.airlineName} ${d.flightNumber}`,
+      route: `${d.fromCity} (${d.fromCode})${fromTerm} → ${d.toCity} (${d.toCode})${toTerm}`,
+      when: `${d.travelDate} · ${d.departureTime} - ${d.arrivalTime} (${d.duration})`,
+      travelDate: d.travelDate,
+      fromCode: d.fromCode,
+      toCode: d.toCode,
+      // ponytail: assumes IST departure (domestic corridor); use airport tz for international.
+      departsAt: d.departureTime ? `${d.travelDate}T${d.departureTime}:00+05:30` : undefined,
+    },
+  };
+}
+
+// Boarding-pass barcode text from a photo/screenshot. Native BarcodeDetector (Android Chrome) when it
+// supports PDF417, else the zxing-wasm ponyfill (iOS, desktop), loaded only when someone scans.
+async function readBoardingPassBarcode(file: File): Promise<string | null> {
+  const formats: ('pdf417' | 'aztec' | 'qr_code' | 'data_matrix')[] = ['pdf417', 'aztec', 'qr_code', 'data_matrix'];
+  type Detector = typeof import('barcode-detector/ponyfill').BarcodeDetector;
+  const Native = (globalThis as { BarcodeDetector?: Detector }).BarcodeDetector;
+  const Impl: Detector =
+    Native && (await Native.getSupportedFormats()).includes('pdf417')
+      ? Native
+      : (await import('barcode-detector/ponyfill')).BarcodeDetector;
+  const codes = await new Impl({ formats }).detect(await createImageBitmap(file));
+  return codes.find((c) => parseBcbp(c.rawValue))?.rawValue ?? null;
+}
 
 export const AddTripSheet: React.FC = () => {
-  const { add, closeAddTrip, updateAddTrip, confirmAddTrip } = useAppStore();
+  const { add, closeAddTrip, updateAddTrip, confirmAddTrip, profile } = useAppStore();
 
   if (!add) return null;
+
+  const handleScan = async (file: File) => {
+    updateAddTrip({ err: '', loading: true, found: null, manual: false });
+    try {
+      const raw = await readBoardingPassBarcode(file);
+      const pass = raw ? parseBcbp(raw) : null;
+      if (!raw || !pass) {
+        updateAddTrip({
+          loading: false,
+          err: 'No boarding-pass barcode found. Use a clear photo or screenshot of the barcode.',
+        });
+        return;
+      }
+      const myName = profile.name || profile.first;
+      if (myName && !nameMatches(pass.passengerName, myName)) {
+        updateAddTrip({
+          loading: false,
+          err: `This pass is for ${pass.passengerName}, which doesn't match your profile name.`,
+        });
+        return;
+      }
+      const leg = pass.legs[0];
+      const date = julianToIso(leg.julianDay, todayIso());
+      const flight = `${leg.carrier} ${leg.flightNumber}`;
+      const lookup = await lookupFlight(flight, date).catch(() => null);
+      // The pass is the source of truth for the route; use lookup only for times/cities when it agrees.
+      const base: FoundTrip =
+        lookup?.ok && lookup.found.fromCode === leg.fromCode && lookup.found.toCode === leg.toCode
+          ? lookup.found
+          : {
+              kind: 'flight',
+              name: `Flight ${flight}`,
+              route: `${leg.fromCode} → ${leg.toCode}`,
+              when: date,
+              travelDate: date,
+              fromCode: leg.fromCode,
+              toCode: leg.toCode,
+            };
+      updateAddTrip({
+        loading: false,
+        flight,
+        date,
+        found: { ...base, ticketVerified: true, boardingPass: raw },
+      });
+    } catch {
+      updateAddTrip({ loading: false, err: 'Could not read that image. Try another photo or screenshot.' });
+    }
+  };
+
+  const handleManual = () => {
+    const m = add.flight.replace(/[\s-]/g, '').toUpperCase().match(/^([A-Z0-9]{2})(\d{1,4})$/);
+    const from = add.manualFrom.trim().toUpperCase();
+    const to = add.manualTo.trim().toUpperCase();
+    if (!m) {
+      updateAddTrip({ err: 'Enter a flight number like 6E 214' });
+      return;
+    }
+    if (!/^[A-Z]{3}$/.test(from) || !/^[A-Z]{3}$/.test(to) || from === to) {
+      updateAddTrip({ err: 'Enter both 3-letter airport codes, e.g. AMD and BOM' });
+      return;
+    }
+    updateAddTrip({
+      err: '',
+      found: {
+        kind: 'flight',
+        name: `Flight ${m[1]} ${m[2]}`,
+        route: `${from} → ${to}`,
+        when: add.date,
+        travelDate: add.date,
+        fromCode: from,
+        toCode: to,
+      },
+    });
+  };
 
   const handleFetch = async () => {
     if (add.kind === 'train') {
@@ -64,34 +186,18 @@ export const AddTripSheet: React.FC = () => {
       updateAddTrip({ loading: true, err: '' });
 
       try {
-        const res = await fetch('/api/flights/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ flightNumber: cleanFlight, date: add.date }),
-        });
-        const json = await res.json();
-        if (json && json.success && json.data) {
-          const d = json.data;
-          const fromTerm = d.fromTerminal ? ` (${d.fromTerminal})` : '';
-          const toTerm = d.toTerminal ? ` (${d.toTerminal})` : '';
-          updateAddTrip({
-            loading: false,
-            found: {
-              kind: 'flight',
-              name: `${d.airlineName} ${d.flightNumber}`,
-              route: `${d.fromCity} (${d.fromCode})${fromTerm} → ${d.toCity} (${d.toCode})${toTerm}`,
-              when: `${d.travelDate} · ${d.departureTime} - ${d.arrivalTime} (${d.duration})`,
-              travelDate: d.travelDate,
-              fromCode: d.fromCode,
-              toCode: d.toCode,
-              // ponytail: assumes IST departure (domestic corridor); use airport tz for international.
-              departsAt: d.departureTime ? `${d.travelDate}T${d.departureTime}:00+05:30` : undefined,
-            },
-          });
+        const r = await lookupFlight(cleanFlight, add.date);
+        if (r.ok) {
+          updateAddTrip({ loading: false, found: r.found });
         } else {
           updateAddTrip({
             loading: false,
-            err: json?.error || 'Flight not found. Please check flight number and date.',
+            // Unknown flight: let them add it by hand instead of blocking.
+            manual: r.status === 404,
+            err:
+              r.status === 404
+                ? "We couldn't look this flight up. Add the airports below, or scan your boarding pass."
+                : r.error || 'Flight not found. Please check flight number and date.',
           });
         }
       } catch {
@@ -248,34 +354,61 @@ export const AddTripSheet: React.FC = () => {
                     className="x-input"
                     placeholder="e.g. 6E 214, AI 887, QP 1354"
                     value={add.flight}
-                    onChange={(e) => updateAddTrip({ flight: e.target.value, found: null, err: '' })}
+                    onChange={(e) => updateAddTrip({ flight: e.target.value, found: null, err: '', manual: false })}
                   />
                 </label>
-                <div style={{ marginTop: '8px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-secondary,#6b7280)', fontWeight: 600 }}>Popular Flight chips:</span>
-                  <div className="x-chips" style={{ marginTop: '4px', gap: '6px' }}>
-                    {['6E 214', 'AI 887', 'QP 1354'].map((fl) => (
-                      <button
-                        key={fl}
-                        type="button"
-                        className="x-chip"
-                        style={{ fontSize: '11px', padding: '4px 8px' }}
-                        onClick={() => updateAddTrip({ flight: fl, found: null, err: '' })}
-                      >
-                        {fl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 <label className="x-field">
                   <span>Date</span>
                   <input
                     className="x-input"
                     type="date"
                     value={add.date}
-                    onChange={(e) => updateAddTrip({ date: e.target.value })}
+                    onChange={(e) => updateAddTrip({ date: e.target.value, found: null, manual: false })}
                   />
                 </label>
+                {add.manual && !add.found && (
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <label className="x-field" style={{ flex: 1 }}>
+                      <span>From airport</span>
+                      <input
+                        className="x-input"
+                        placeholder="AMD"
+                        maxLength={3}
+                        autoCapitalize="characters"
+                        value={add.manualFrom}
+                        onChange={(e) => updateAddTrip({ manualFrom: e.target.value.replace(/[^a-z]/gi, ''), err: '' })}
+                      />
+                    </label>
+                    <label className="x-field" style={{ flex: 1 }}>
+                      <span>To airport</span>
+                      <input
+                        className="x-input"
+                        placeholder="BOM"
+                        maxLength={3}
+                        autoCapitalize="characters"
+                        value={add.manualTo}
+                        onChange={(e) => updateAddTrip({ manualTo: e.target.value.replace(/[^a-z]/gi, ''), err: '' })}
+                      />
+                    </label>
+                  </div>
+                )}
+                {!add.found && (
+                  <label className="x-btn x-btn--line" style={{ marginTop: '10px', cursor: add.loading ? 'default' : 'pointer' }}>
+                    <SvgIcon name="seal" size={18} width={0} />
+                    Scan boarding pass (verified)
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      disabled={add.loading}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = ''; // same file can be picked again
+                        if (f) handleScan(f);
+                      }}
+                    />
+                  </label>
+                )}
               </>
             )}
 
@@ -301,7 +434,11 @@ export const AddTripSheet: React.FC = () => {
               <div className="x-card x-found">
                 <span className="x-ver">
                   <SvgIcon name="seal" size={16} width={0} />
-                  Trip found
+                  {add.found.ticketVerified
+                    ? 'Boarding pass verified'
+                    : add.found.name.startsWith('Flight ')
+                    ? 'Added manually · scan your boarding pass later to verify'
+                    : 'Trip found'}
                 </span>
                 <span className="x-trip__top">
                   <span className="x-trip__ic">
@@ -329,6 +466,10 @@ export const AddTripSheet: React.FC = () => {
                   onClick={() => updateAddTrip({ step: 2 })}
                 >
                   Continue
+                </button>
+              ) : add.manual && !isTrain ? (
+                <button type="button" className="x-btn" disabled={add.loading} onClick={handleManual}>
+                  Add flight
                 </button>
               ) : (
                 <button

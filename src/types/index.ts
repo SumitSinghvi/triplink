@@ -33,6 +33,8 @@ export interface TripData {
   coach?: string;
   berth?: string;
   pnrMasked?: string;
+  /** Boarding pass scanned (server re-checks it before storing ticket_verified). */
+  ticketVerified?: boolean;
   vis: TripVisibility;
 }
 
@@ -49,6 +51,8 @@ export interface MatchProfile {
   tags?: string[];
   langs?: string;
   verified?: boolean;
+  /** Their trip is backed by a scanned boarding pass. */
+  ticketVerified?: boolean;
   coach?: string;
   bio?: string;
   cities?: string[];
@@ -85,6 +89,10 @@ export interface AddTripModalState {
   pnr: string;
   flight: string;
   date: string;
+  /** Manual flight entry (lookup found nothing): airport codes typed by the user. */
+  manual: boolean;
+  manualFrom: string;
+  manualTo: string;
   found: {
     kind: TripKind;
     name: string;
@@ -97,6 +105,9 @@ export interface AddTripModalState {
     coach?: string;
     berth?: string;
     pnrMasked?: string;
+    ticketVerified?: boolean;
+    /** Raw boarding-pass barcode text; sent once for the server check, never persisted. */
+    boardingPass?: string;
   } | null;
   loading: boolean;
   err: string;
