@@ -35,6 +35,8 @@ export interface TripData {
   pnrMasked?: string;
   /** Boarding pass scanned (server re-checks it before storing ticket_verified). */
   ticketVerified?: boolean;
+  /** Last known flight status from AeroDataBox (Expected, Delayed, Canceled, ...). */
+  flightStatus?: string;
   vis: TripVisibility;
 }
 
@@ -102,6 +104,7 @@ export interface AddTripModalState {
     berth?: string;
     pnrMasked?: string;
     ticketVerified?: boolean;
+    flightStatus?: string;
     /** Raw boarding-pass barcode text; sent once for the server check, never persisted. */
     boardingPass?: string;
   } | null;

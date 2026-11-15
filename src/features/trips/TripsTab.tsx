@@ -1,12 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppStore, TripData } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
-import { isPastTrip } from '@/lib/supabaseSync';
+import { extractJourneyKey, isPastTrip, tripTravelDate } from '@/lib/supabaseSync';
+import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
+import { readBoardingPassBarcode } from '@/lib/boardingPassScan';
+import { isCancelled, isDelayed } from '@/lib/flightLookup';
 
 export const TripsTab: React.FC = () => {
-  const { trips, openAddTrip, selectTrip, matches, gone } = useAppStore();
+  const { trips, openAddTrip, selectTrip, matches, gone, profile, verifyTrip, showToast, refreshFlightTrip } =
+    useAppStore();
+  const [verifying, setVerifying] = useState<string | null>(null);
+
+  // Re-check upcoming flights when the list is viewed (store skips >7 days out and throttles).
+  const flightIds = trips.filter((t) => t.kind === 'flight').map((t) => t.id).join(',');
+  useEffect(() => {
+    flightIds.split(',').filter(Boolean).forEach((id) => refreshFlightTrip(id).catch(() => {}));
+  }, [flightIds, refreshFlightTrip]);
 
   const getMatchCount = (tripId: string) => {
     return matches.filter((m) => m.tripId === tripId && !gone[m.id]).length;
@@ -20,34 +31,92 @@ export const TripsTab: React.FC = () => {
     return on.length ? 'Visible: ' + on.join(', ') : 'Hidden';
   };
 
+  // Scan a boarding pass for an already-added flight. Checks here give clear errors; the server re-checks.
+  const handleVerify = async (t: TripData, file: File) => {
+    setVerifying(t.id);
+    try {
+      const raw = await readBoardingPassBarcode(file);
+      const pass = raw ? parseBcbp(raw) : null;
+      if (!raw || !pass) {
+        showToast('No boarding-pass barcode found. Use a clear photo or screenshot of the barcode.');
+        return;
+      }
+      const date = tripTravelDate(t);
+      const key = extractJourneyKey(t.name);
+      const leg = pass.legs.find((l) => `${l.carrier}${l.flightNumber}` === key);
+      if (!leg || !date || julianToIso(leg.julianDay, date) !== date) {
+        const l = pass.legs[0];
+        showToast(`This pass is for ${l.carrier} ${l.flightNumber}, not ${t.name} on ${date ?? 'this date'}.`);
+        return;
+      }
+      const myName = profile.name || profile.first;
+      if (!myName || !nameMatches(pass.passengerName, myName)) {
+        showToast(`This pass is for ${pass.passengerName}, which doesn't match your profile name.`);
+        return;
+      }
+      showToast((await verifyTrip(t.id, raw)) ? 'Boarding pass verified' : 'Could not verify this pass. Try again.');
+    } catch (err) {
+      console.warn('Boarding pass scan failed:', err);
+      showToast('Could not read that image. Try another photo or screenshot.');
+    } finally {
+      setVerifying(null);
+    }
+  };
+
   const renderTrip = (t: TripData) => (
-    <button
-      key={t.id}
-      type="button"
-      className="x-card"
-      onClick={() => selectTrip(t.id)}
-    >
-      <span className="x-trip__top">
-        <span className="x-trip__ic">
-          <SvgIcon name={t.kind === 'flight' ? 'plane' : 'train'} size={20} />
+    <React.Fragment key={t.id}>
+      <button
+        type="button"
+        className="x-card"
+        onClick={() => selectTrip(t.id)}
+      >
+        <span className="x-trip__top">
+          <span className="x-trip__ic">
+            <SvgIcon name={t.kind === 'flight' ? 'plane' : 'train'} size={20} />
+          </span>
+          <span>
+            <b>{t.name}</b>
+            <small>{t.route}</small>
+          </span>
         </span>
-        <span>
-          <b>{t.name}</b>
-          <small>{t.route}</small>
+        <span className="x-trip__when">{t.when}</span>
+        <span className="x-trip__foot">
+          <span className="x-m__tags">
+            <span className="pill">{visLabel(t.vis)}</span>
+            {t.vis.twoh && <span className="pill">2 h before only</span>}
+            {t.ticketVerified && <span className="pill">Ticket verified</span>}
+            {isCancelled(t.flightStatus) && (
+              <span className="pill" style={{ color: 'var(--fill-system-red)' }}>Flight cancelled</span>
+            )}
+            {isDelayed(t.flightStatus) && <span className="pill">{t.flightStatus}</span>}
+          </span>
+          <span className="x-count">
+            {getMatchCount(t.id)} matches{' '}
+            <SvgIcon name="chev" size={16} />
+          </span>
         </span>
-      </span>
-      <span className="x-trip__when">{t.when}</span>
-      <span className="x-trip__foot">
-        <span className="x-m__tags">
-          <span className="pill">{visLabel(t.vis)}</span>
-          {t.vis.twoh && <span className="pill">2 h before only</span>}
-        </span>
-        <span className="x-count">
-          {getMatchCount(t.id)} matches{' '}
-          <SvgIcon name="chev" size={16} />
-        </span>
-      </span>
-    </button>
+      </button>
+      {t.kind === 'flight' && !t.ticketVerified && !isPastTrip(t) && !isCancelled(t.flightStatus) && (
+        <label
+          className="x-btn x-btn--line x-btn--sm"
+          style={{ cursor: verifying ? 'default' : 'pointer', marginTop: '-4px' }}
+        >
+          <SvgIcon name="seal" size={16} width={0} />
+          {verifying === t.id ? 'Checking boarding pass...' : 'Verify with boarding pass'}
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            disabled={!!verifying}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = ''; // same file can be picked again
+              if (f) handleVerify(t, f);
+            }}
+          />
+        </label>
+      )}
+    </React.Fragment>
   );
 
   return (

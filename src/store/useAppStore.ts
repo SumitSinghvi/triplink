@@ -16,6 +16,7 @@ import {
 import {
   syncUserProfile,
   syncUserTrip,
+  verifyTripTicket,
   fetchLiveCoTravelers,
   sendConnectionRequest,
   respondToConnectionRequest,
@@ -30,7 +31,13 @@ import {
   tripKey,
   newMessageId,
   endServerSession,
+  extractJourneyKey,
+  tripTravelDate,
 } from '@/lib/supabaseSync';
+import { lookupFlight } from '@/lib/flightLookup';
+
+// Per-tab throttle for refreshFlightTrip; the server cache bounds API credits across all users.
+const lastFlightCheck = new Map<string, number>();
 import { mergeChat, countNewIncoming } from '@/lib/chatMerge';
 import { todayIso } from '@/lib/travelDate';
 
@@ -167,6 +174,8 @@ export interface AppState {
   closeAddTrip: () => void;
   updateAddTrip: (partial: Partial<AddTripModalState>) => void;
   confirmAddTrip: () => void;
+  verifyTrip: (tripId: string, boardingPass: string) => Promise<boolean>;
+  refreshFlightTrip: (tripId: string) => Promise<void>;
   selectTrip: (id: string) => void;
   refreshLiveMatches: (tripId?: string) => Promise<void>;
   syncUserRequests: () => Promise<void>;
@@ -303,6 +312,37 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           add: state.add ? { ...state.add, ...partial } : null,
         })),
+      verifyTrip: async (tripId, boardingPass) => {
+        const trip = get().trips.find((t) => t.id === tripId);
+        if (!trip) return false;
+        // Profile row must exist server-side: the pass name is checked against it.
+        await syncUserProfile(get().profile, get().modes);
+        const ok = await verifyTripTicket(trip, boardingPass);
+        if (ok) set((s) => ({ trips: s.trips.map((t) => (t.id === tripId ? { ...t, ticketVerified: true } : t)) }));
+        return ok;
+      },
+      // Re-check an upcoming flight (next 7 days) when it's viewed: times, terminals, cancellation.
+      // Route codes from a boarding pass / manual entry win: a lookup that disagrees is ignored.
+      refreshFlightTrip: async (tripId) => {
+        const trip = get().trips.find((t) => t.id === tripId);
+        const date = trip && tripTravelDate(trip);
+        if (!trip || trip.kind !== 'flight' || !date) return;
+        const daysOut = (Date.parse(date) - Date.parse(todayIso())) / 86_400_000;
+        if (daysOut < 0 || daysOut > 7) return;
+        if (Date.now() - (lastFlightCheck.get(tripId) ?? 0) < 10 * 60_000) return;
+        lastFlightCheck.set(tripId, Date.now());
+
+        const r = await lookupFlight(extractJourneyKey(trip.name), date).catch(() => null);
+        if (!r?.ok) return;
+        const f = r.found;
+        if ((trip.fromCode && trip.fromCode !== f.fromCode) || (trip.toCode && trip.toCode !== f.toCode)) return;
+        if (trip.when === f.when && trip.departsAt === f.departsAt && trip.flightStatus === f.flightStatus && trip.route === f.route) return;
+
+        const next: TripData = { ...trip, route: f.route, when: f.when, departsAt: f.departsAt, flightStatus: f.flightStatus };
+        set((s) => ({ trips: s.trips.map((t) => (t.id === tripId ? next : t)) }));
+        // departsAt drives the server-side "2 h before" visibility window.
+        if (next.departsAt !== trip.departsAt) syncUserTrip(next);
+      },
       confirmAddTrip: () => {
         const add = get().add;
         if (!add || !add.found) return;
@@ -321,6 +361,7 @@ export const useAppStore = create<AppState>()(
           berth: add.found.berth,
           pnrMasked: add.found.pnrMasked,
           ticketVerified: add.found.ticketVerified,
+          flightStatus: add.found.flightStatus,
           vis: {
             business: add.vis.business,
             social: add.vis.social,

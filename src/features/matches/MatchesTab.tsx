@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 import { extractJourneyKey, isPastTrip, tripTravelDate } from '@/lib/supabaseSync';
 import type { IncomingRequestItem } from '@/store/useAppStore';
+import { isCancelled } from '@/lib/flightLookup';
 
 const FILTERS = ['All', 'Business', 'Social', 'Same industry'] as const;
 
@@ -28,25 +29,31 @@ export const MatchesTab: React.FC = () => {
     setTab,
     refreshLiveMatches,
     syncUserRequests,
+    refreshFlightTrip,
   } = useAppStore();
 
   const selectedTrip = trips.find((t) => t.id === selTripId) || trips[0];
   const tripId = selectedTrip?.id;
   // Past trips: load once, don't keep polling for co-travellers.
   const tripIsPast = selectedTrip ? isPastTrip(selectedTrip) : false;
+  const cancelled = isCancelled(selectedTrip?.flightStatus);
 
   useEffect(() => {
-    if (tripId) {
+    if (tripId) refreshFlightTrip(tripId).catch(() => {});
+  }, [tripId, refreshFlightTrip]);
+
+  useEffect(() => {
+    if (tripId && !cancelled) {
       refreshLiveMatches(tripId).catch(() => {});
     }
     syncUserRequests().catch(() => {});
 
     // Poll co-travellers every 15s (requests are polled app-wide in page.tsx).
     const interval = setInterval(() => {
-      if (tripId && !tripIsPast) refreshLiveMatches(tripId).catch(() => {});
+      if (tripId && !tripIsPast && !cancelled) refreshLiveMatches(tripId).catch(() => {});
     }, 15000);
     return () => clearInterval(interval);
-  }, [tripId, tripIsPast, refreshLiveMatches, syncUserRequests]);
+  }, [tripId, tripIsPast, cancelled, refreshLiveMatches, syncUserRequests]);
 
   if (!selectedTrip) {
     return (
@@ -177,7 +184,12 @@ export const MatchesTab: React.FC = () => {
           </div>
         ))}
 
-        {list.length > 0 ? (
+        {cancelled ? (
+          <div className="x-note">
+            <SvgIcon name="flag" size={18} />
+            <span>This flight has been cancelled, so co-traveller matching is paused. Add your new flight to find people on it.</span>
+          </div>
+        ) : list.length > 0 ? (
           list.map((m) => {
             const r = req[m.id];
             const tags = m.type === 'Business' ? [m.industry] : [...(m.tags || [])];

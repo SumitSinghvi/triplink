@@ -46,6 +46,9 @@ export const syncUserProfile = (profile: UserProfileData, modes?: { business: bo
 export const syncUserTrip = (trip: TripData, boardingPass?: string) =>
   call<boolean>('syncTrip', [trip, boardingPass], false);
 
+export const verifyTripTicket = (trip: TripData, boardingPass: string) =>
+  call<boolean>('verifyTrip', [trip, boardingPass], false);
+
 export const fetchUserTrips = () => call<TripData[]>('myTrips', [], []);
 
 export const fetchLiveCoTravelers = (trip: TripData, currentUserIndustry?: string) =>

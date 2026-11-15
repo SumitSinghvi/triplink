@@ -6,52 +6,8 @@ import { SvgIcon } from '@/shared/icons';
 import { DEMO_PRESET_PNRS } from '@/lib/mockData';
 import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
 import { todayIso } from '@/lib/travelDate';
-import type { AddTripModalState } from '@/types';
-
-type FoundTrip = NonNullable<AddTripModalState['found']>;
-type FlightLookup = { ok: true; found: FoundTrip } | { ok: false; status: number; error?: string };
-
-// Server flight lookup (AeroDataBox). 404 = unknown flight -> manual entry is offered.
-async function lookupFlight(flightNumber: string, date: string): Promise<FlightLookup> {
-  const res = await fetch('/api/flights/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ flightNumber, date }),
-  });
-  const json = await res.json();
-  if (!json?.success || !json.data) return { ok: false, status: res.status, error: json?.error };
-  const d = json.data;
-  const fromTerm = d.fromTerminal ? ` (${d.fromTerminal})` : '';
-  const toTerm = d.toTerminal ? ` (${d.toTerminal})` : '';
-  return {
-    ok: true,
-    found: {
-      kind: 'flight',
-      name: `${d.airlineName} ${d.flightNumber}`,
-      route: `${d.fromCity} (${d.fromCode})${fromTerm} → ${d.toCity} (${d.toCode})${toTerm}`,
-      when: `${d.travelDate} · ${d.departureTime} - ${d.arrivalTime} (${d.duration})`,
-      travelDate: d.travelDate,
-      fromCode: d.fromCode,
-      toCode: d.toCode,
-      // ponytail: assumes IST departure (domestic corridor); use airport tz for international.
-      departsAt: d.departureTime ? `${d.travelDate}T${d.departureTime}:00+05:30` : undefined,
-    },
-  };
-}
-
-// Boarding-pass barcode text from a photo/screenshot. Native BarcodeDetector (Android Chrome) when it
-// supports PDF417, else the zxing-wasm ponyfill (iOS, desktop), loaded only when someone scans.
-async function readBoardingPassBarcode(file: File): Promise<string | null> {
-  const formats: ('pdf417' | 'aztec' | 'qr_code' | 'data_matrix')[] = ['pdf417', 'aztec', 'qr_code', 'data_matrix'];
-  type Detector = typeof import('barcode-detector/ponyfill').BarcodeDetector;
-  const Native = (globalThis as { BarcodeDetector?: Detector }).BarcodeDetector;
-  const Impl: Detector =
-    Native && (await Native.getSupportedFormats()).includes('pdf417')
-      ? Native
-      : (await import('barcode-detector/ponyfill')).BarcodeDetector;
-  const codes = await new Impl({ formats }).detect(await createImageBitmap(file));
-  return codes.find((c) => parseBcbp(c.rawValue))?.rawValue ?? null;
-}
+import { readBoardingPassBarcode } from '@/lib/boardingPassScan';
+import { lookupFlight, type FoundTrip } from '@/lib/flightLookup';
 
 export const AddTripSheet: React.FC = () => {
   const { add, closeAddTrip, updateAddTrip, confirmAddTrip, profile } = useAppStore();

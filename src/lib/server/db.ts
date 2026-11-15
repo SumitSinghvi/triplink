@@ -170,6 +170,15 @@ export async function syncUserTrip(userId: string, trip: TripData, boardingPass?
   }
 }
 
+// Verify an already-added trip with a boarding pass. Re-syncs the trip (creating the row if an earlier
+// sync failed), which stores ticket_verified=true. True only when the pass actually verified.
+export async function verifyTripTicket(userId: string, trip: TripData, boardingPass: string): Promise<boolean> {
+  const travelDate = tripTravelDate(trip);
+  if (!travelDate || !(await hasTicketColumn())) return false;
+  if (!(await boardingPassVerifies(userId, boardingPass, extractJourneyKey(trip.name), travelDate))) return false;
+  return syncUserTrip(userId, trip, boardingPass);
+}
+
 // Load this user's trips from Supabase (re-login / new device).
 export async function fetchUserTrips(userId: string): Promise<TripData[]> {
   try {
