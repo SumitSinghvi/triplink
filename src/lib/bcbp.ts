@@ -77,12 +77,3 @@ export function julianToIso(julianDay: number, today: string): string {
   }
   return best;
 }
-
-// Loose name check: any 2+ letter word of the profile name appears in the pass name ("SINGH/SUMIT MR").
-export function nameMatches(passName: string, profileName: string): boolean {
-  const passWords = new Set(passName.toUpperCase().split(/[^A-Z]+/).filter(Boolean));
-  return profileName
-    .toUpperCase()
-    .split(/[^A-Z]+/)
-    .some((w) => w.length >= 2 && passWords.has(w));
-}

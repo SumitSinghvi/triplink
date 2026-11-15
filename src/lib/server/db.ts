@@ -4,7 +4,7 @@ import type { MatchProfile, TripData, UserProfileData } from '@/types';
 import { supabaseAdmin } from './supabaseAdmin';
 import { todayIso } from '@/lib/travelDate';
 import { canSee, showFromFor } from '@/lib/tripVisibility';
-import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
+import { julianToIso, parseBcbp } from '@/lib/bcbp';
 import {
   type IncomingRequestItem,
   buildDeterministicMatchId,
@@ -52,18 +52,16 @@ function hasTicketColumn(): Promise<boolean> {
   return ticketColumn;
 }
 
-// A boarding pass verifies a trip only when its barcode names this flight, this date and this user.
-// ponytail: unsigned BCBP text can be forged by a determined user; upgrade = airline-signed BCBP or a
-// check-in API. Raw barcode (name, PNR) is used here only and never stored.
-async function boardingPassVerifies(userId: string, raw: string, journeyKey: string, travelDate: string) {
+// A boarding pass verifies a trip when its barcode names this flight and this date.
+// ponytail: passenger name is not checked against the profile (dropped until ~100+ users), and unsigned
+// BCBP text can be forged; upgrade = name check + airline-signed BCBP or a check-in API.
+// Raw barcode (name, PNR) is used here only and never stored.
+async function boardingPassVerifies(raw: string, journeyKey: string, travelDate: string) {
   const pass = parseBcbp(raw);
   if (!pass) return false;
-  const legOk = pass.legs.some(
+  return pass.legs.some(
     (l) => `${l.carrier}${l.flightNumber}` === journeyKey && julianToIso(l.julianDay, travelDate) === travelDate
   );
-  if (!legOk) return false;
-  const { data } = await db().from('profiles').select('name').eq('id', userId).maybeSingle();
-  return !!data?.name && nameMatches(pass.passengerName, data.name);
 }
 
 // Visibility for rows from either schema: legacy rows only have `mode`.
@@ -140,7 +138,7 @@ export async function syncUserTrip(userId: string, trip: TripData, boardingPass?
     const verified =
       boardingPass &&
       (await hasTicketColumn()) &&
-      (await boardingPassVerifies(userId, boardingPass, cleanNumber, travelDate))
+      (await boardingPassVerifies(boardingPass, cleanNumber, travelDate))
         ? { ticket_verified: true }
         : {};
 
@@ -175,7 +173,7 @@ export async function syncUserTrip(userId: string, trip: TripData, boardingPass?
 export async function verifyTripTicket(userId: string, trip: TripData, boardingPass: string): Promise<boolean> {
   const travelDate = tripTravelDate(trip);
   if (!travelDate || !(await hasTicketColumn())) return false;
-  if (!(await boardingPassVerifies(userId, boardingPass, extractJourneyKey(trip.name), travelDate))) return false;
+  if (!(await boardingPassVerifies(boardingPass, extractJourneyKey(trip.name), travelDate))) return false;
   return syncUserTrip(userId, trip, boardingPass);
 }
 

@@ -4,13 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { useAppStore, TripData } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 import { extractJourneyKey, isPastTrip, tripTravelDate } from '@/lib/supabaseSync';
-import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
+import { julianToIso, parseBcbp } from '@/lib/bcbp';
 import { readBoardingPassBarcode } from '@/lib/boardingPassScan';
 import { isCancelled, isDelayed } from '@/lib/flightLookup';
 import { PassPicker } from './PassPicker';
 
 export const TripsTab: React.FC = () => {
-  const { trips, openAddTrip, selectTrip, matches, gone, profile, verifyTrip, showToast, refreshFlightTrip } =
+  const { trips, openAddTrip, selectTrip, matches, gone, verifyTrip, showToast, refreshFlightTrip } =
     useAppStore();
   const [verifying, setVerifying] = useState<string | null>(null);
 
@@ -48,11 +48,6 @@ export const TripsTab: React.FC = () => {
       if (!leg || !date || julianToIso(leg.julianDay, date) !== date) {
         const l = pass.legs[0];
         showToast(`This pass is for ${l.carrier} ${l.flightNumber}, not ${t.name} on ${date ?? 'this date'}.`);
-        return;
-      }
-      const myName = profile.name || profile.first;
-      if (!myName || !nameMatches(pass.passengerName, myName)) {
-        showToast(`This pass is for ${pass.passengerName}, which doesn't match your profile name.`);
         return;
       }
       showToast((await verifyTrip(t.id, raw)) ? 'Boarding pass verified' : 'Could not verify this pass. Try again.');

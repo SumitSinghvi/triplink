@@ -1,6 +1,6 @@
 // Self-check: node src/lib/bcbp.check.mjs
 import assert from 'node:assert/strict';
-import { parseBcbp, julianToIso, nameMatches } from './bcbp.ts';
+import { parseBcbp, julianToIso } from './bcbp.ts';
 
 // IATA spec sample (single leg, no conditional data)
 const spec = parseBcbp('M1DESMARAIS/LUC       EABC123 YULFRAAC 0834 326J001A0025 100');
@@ -30,6 +30,4 @@ assert.equal(julianToIso(364, '2027-01-02'), '2026-12-30');
 assert.equal(julianToIso(366, '2026-11-15'), ''); // no leap year within ±1y -> invalid
 assert.equal(julianToIso(366, '2028-11-15'), '2028-12-31');
 
-assert.equal(nameMatches('SINGH/SUMIT MR', 'Sumit Singhvi'), true);
-assert.equal(nameMatches('DESMARAIS/LUC', 'Sumit Singhvi'), false);
 console.log('bcbp: ok');

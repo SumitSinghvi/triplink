@@ -4,14 +4,14 @@ import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
 import { DEMO_PRESET_PNRS } from '@/lib/mockData';
-import { julianToIso, nameMatches, parseBcbp } from '@/lib/bcbp';
+import { julianToIso, parseBcbp } from '@/lib/bcbp';
 import { todayIso } from '@/lib/travelDate';
 import { readBoardingPassBarcode } from '@/lib/boardingPassScan';
 import { lookupFlight, type FoundTrip } from '@/lib/flightLookup';
 import { PassPicker } from './PassPicker';
 
 export const AddTripSheet: React.FC = () => {
-  const { add, closeAddTrip, updateAddTrip, confirmAddTrip, profile } = useAppStore();
+  const { add, closeAddTrip, updateAddTrip, confirmAddTrip } = useAppStore();
 
   if (!add) return null;
 
@@ -24,14 +24,6 @@ export const AddTripSheet: React.FC = () => {
         updateAddTrip({
           loading: false,
           err: 'No boarding-pass barcode found. Use a clear photo or screenshot of the barcode.',
-        });
-        return;
-      }
-      const myName = profile.name || profile.first;
-      if (myName && !nameMatches(pass.passengerName, myName)) {
-        updateAddTrip({
-          loading: false,
-          err: `This pass is for ${pass.passengerName}, which doesn't match your profile name.`,
         });
         return;
       }
