@@ -11,6 +11,10 @@ interface OtpEntry {
 // ponytail: anyone can log in as any number while this is on; adding FAST2SMS_API_KEY turns it off.
 export const DEMO_OTP_ALLOWED = process.env.NODE_ENV !== 'production' || !process.env.FAST2SMS_API_KEY;
 
+// Demo accounts: no SMS is sent, code 1234 always works (any environment).
+// ponytail: anyone who knows these numbers can log in as them; remove when real SMS is live.
+export const DEMO_PHONES = new Set(['8610539925', '1234567891', '1111122222', '0000011111']);
+
 // In-memory fallback
 const fallbackOtpStore = new Map<string, OtpEntry>();
 
@@ -48,7 +52,7 @@ export async function verifyOtp(
   const clean = phone.replace(/\D/g, '').slice(-10);
   const cleanInput = inputOtp.trim();
 
-  if (DEMO_OTP_ALLOWED && cleanInput === '1234') {
+  if ((DEMO_OTP_ALLOWED || DEMO_PHONES.has(clean)) && cleanInput === '1234') {
     return { valid: true };
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveOtp } from '@/lib/otpStore';
+import { saveOtp, DEMO_PHONES } from '@/lib/otpStore';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     await saveOtp(tenDigitPhone, generatedOtp);
 
     const apiKey = process.env.FAST2SMS_API_KEY;
-    if (!apiKey) {
+    if (!apiKey || DEMO_PHONES.has(tenDigitPhone)) {
       // No SMS provider yet: demo code 1234 is accepted. Never echo the generated OTP in production.
       return NextResponse.json({
         success: true,
