@@ -6,6 +6,7 @@ import { SvgIcon } from '@/shared/icons';
 import { extractJourneyKey, isPastTrip, tripTravelDate } from '@/lib/supabaseSync';
 import type { IncomingRequestItem } from '@/store/useAppStore';
 import { isCancelled } from '@/lib/flightLookup';
+import { usePoll } from '@/lib/usePoll';
 
 const FILTERS = ['All', 'Business', 'Social', 'Same industry'] as const;
 
@@ -47,13 +48,13 @@ export const MatchesTab: React.FC = () => {
       refreshLiveMatches(tripId).catch(() => {});
     }
     syncUserRequests().catch(() => {});
-
-    // Poll co-travellers every 15s (requests are polled app-wide in page.tsx).
-    const interval = setInterval(() => {
-      if (tripId && !tripIsPast && !cancelled) refreshLiveMatches(tripId).catch(() => {});
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [tripId, tripIsPast, cancelled, refreshLiveMatches, syncUserRequests]);
+  }, [tripId, cancelled, refreshLiveMatches, syncUserRequests]);
+  // Poll co-travellers every 15s (requests are polled app-wide in page.tsx).
+  usePoll(
+    () => tripId && refreshLiveMatches(tripId).catch(() => {}),
+    15000,
+    tripId && !tripIsPast && !cancelled ? tripId : null
+  );
 
   if (!selectedTrip) {
     return (

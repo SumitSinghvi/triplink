@@ -101,7 +101,7 @@ const ACTIONS: Record<string, (me: string, a: unknown[]) => Promise<unknown>> = 
   },
   respondRequest: (me, a) =>
     dbApi.respondToConnectionRequest(me, rowId(a[0]), a[1] === 'accepted' ? 'accepted' : 'declined'),
-  requests: (me) => dbApi.fetchUserRequestsAndMatches(me),
+  inbox: (me) => dbApi.fetchInbox(me),
   sendMessage: (me, a) =>
     dbApi.sendChatMessageToSupabase(chatKey(a[0]), me, str(a[1], 2000), a[2] === true, msgId(a[3])),
   messages: (me, a) => dbApi.fetchLiveChatMessages(chatKey(a[0]), me),

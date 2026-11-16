@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { setUnauthorizedHandler } from '@/lib/supabaseSync';
+import { usePoll } from '@/lib/usePoll';
 import { OnboardingFlow } from '@/features/onboarding/OnboardingFlow';
 import { TripsTab } from '@/features/trips/TripsTab';
 import { MatchesTab } from '@/features/matches/MatchesTab';
@@ -19,7 +20,6 @@ export default function Home() {
   const tab = useAppStore((s) => s.tab);
   const userId = useAppStore((s) => s.userId);
   const syncUserRequests = useAppStore((s) => s.syncUserRequests);
-  const syncChatMessages = useAppStore((s) => s.syncChatMessages);
 
   // Server session missing/expired while the app thinks it's signed in -> sign out cleanly.
   useEffect(() => {
@@ -32,21 +32,13 @@ export default function Home() {
     return () => setUnauthorizedHandler(null);
   }, [screen]);
 
-  // App-wide polling: connections/requests, plus background chats for unread badges.
+  // App-wide polling: one inbox request (requests + all chats, for unread badges).
   // The open chat polls itself faster in ActiveChatView.
+  const inboxKey = screen === 'main' ? userId : null;
   useEffect(() => {
-    if (screen !== 'main') return;
-    const tick = () => {
-      syncUserRequests().catch(() => {});
-      const { req, activeChatId } = useAppStore.getState();
-      for (const [id, status] of Object.entries(req)) {
-        if (status === 'accepted' && id !== activeChatId) syncChatMessages(id).catch(() => {});
-      }
-    };
-    tick();
-    const interval = setInterval(tick, 20000);
-    return () => clearInterval(interval);
-  }, [screen, userId, syncUserRequests, syncChatMessages]);
+    if (inboxKey !== null) syncUserRequests().catch(() => {});
+  }, [inboxKey, syncUserRequests]);
+  usePoll(() => syncUserRequests().catch(() => {}), 20000, inboxKey);
 
   return (
     <main className="x-stage">

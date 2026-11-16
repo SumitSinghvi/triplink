@@ -20,7 +20,7 @@ import {
   fetchLiveCoTravelers,
   sendConnectionRequest,
   respondToConnectionRequest,
-  fetchUserRequestsAndMatches,
+  fetchInbox,
   sendChatMessageToSupabase,
   fetchLiveChatMessages,
   IncomingRequestItem,
@@ -49,6 +49,22 @@ function withTripMatches(matches: MatchProfile[], tripId: string, fresh: MatchPr
     ...matches.filter((m) => m.tripId !== tripId && !(m.tripId === '' && freshIds.has(m.id))),
     ...fresh,
   ];
+}
+
+// Merge fetched history into one chat; flags unread when the other person sent something new.
+// Empty history = none yet or a fetch error: keep local rather than wipe it.
+function withChatHistory(
+  state: Pick<AppState, 'chats' | 'unread' | 'gone' | 'activeChatId'>,
+  matchId: string,
+  live: ChatMessage[]
+): Pick<AppState, 'chats' | 'unread'> {
+  if (live.length === 0 || state.gone[matchId]) return state;
+  const local = state.chats[matchId] || [];
+  const hasNew = countNewIncoming(local, live) > 0;
+  return {
+    chats: { ...state.chats, [matchId]: mergeChat(live, local) },
+    unread: hasNew && state.activeChatId !== matchId ? { ...state.unread, [matchId]: true } : state.unread,
+  };
 }
 
 // Clears or flags a local message's delivery status after the send settles.
@@ -379,7 +395,7 @@ export const useAppStore = create<AppState>()(
         // trips.user_id references profiles: the profile row must exist before the trip insert.
         syncUserProfile(profile, modes).then(() => syncUserTrip(newTrip, add.found?.boardingPass));
         fetchLiveCoTravelers(newTrip, profile.industry).then((coTravelers) => {
-          set((state) => ({ matches: withTripMatches(state.matches, newId, coTravelers) }));
+          if (coTravelers) set((state) => ({ matches: withTripMatches(state.matches, newId, coTravelers) }));
         });
 
         get().showToast('Trip Added Successfully', 'View Matches', () => {
@@ -396,22 +412,27 @@ export const useAppStore = create<AppState>()(
         if (!trip) return;
         const { profile } = get();
         const coTravelers = await fetchLiveCoTravelers(trip, profile.industry);
+        if (!coTravelers) return; // failed: keep the cached list on screen
         set((state) => ({ matches: withTripMatches(state.matches, trip.id, coTravelers) }));
       },
+      // Requests, contacts and all chat histories in one request (unread badges included).
       syncUserRequests: async () => {
         const { userId } = get();
-        const { incoming, reqStatus, contacts } = await fetchUserRequestsAndMatches();
-        if (get().userId !== userId) return; // logged out / switched meanwhile
+        const inbox = await fetchInbox();
+        if (!inbox || get().userId !== userId) return; // failed (keep cache) / logged out meanwhile
+        const { incoming, reqStatus, contacts } = inbox;
         set((state) => {
           // Keep trip-scoped match entries; add accepted contacts not otherwise known so chats render.
           const known = new Set(state.matches.map((m) => m.id));
-          const chats = { ...state.chats };
-          for (const c of contacts) if (!chats[c.id] && !state.gone[c.id]) chats[c.id] = [];
+          let next = { ...state, chats: { ...state.chats } };
+          for (const c of contacts) if (!next.chats[c.id] && !state.gone[c.id]) next.chats[c.id] = [];
+          for (const [id, live] of Object.entries(inbox.chats)) next = { ...next, ...withChatHistory(next, id, live) };
           return {
             incomingRequests: incoming.filter((r) => !state.gone[`match_${r.requesterId}`]),
             req: { ...state.req, ...reqStatus },
             matches: [...state.matches, ...contacts.filter((c) => !known.has(c.id))],
-            chats,
+            chats: next.chats,
+            unread: next.unread,
           };
         });
       },
@@ -540,20 +561,8 @@ export const useAppStore = create<AppState>()(
       syncChatMessages: async (matchId) => {
         const { userId } = get();
         const liveMsgs = await fetchLiveChatMessages(matchId);
-        // Empty = no history or fetch error: keep local rather than wipe it.
-        if (liveMsgs.length === 0 || get().userId !== userId) return;
-        set((state) => {
-          if (state.gone[matchId]) return {};
-          const local = state.chats[matchId] || [];
-          const hasNew = countNewIncoming(local, liveMsgs) > 0;
-          return {
-            chats: { ...state.chats, [matchId]: mergeChat(liveMsgs, local) },
-            unread:
-              hasNew && state.activeChatId !== matchId
-                ? { ...state.unread, [matchId]: true }
-                : state.unread,
-          };
-        });
+        if (get().userId !== userId) return;
+        set((state) => withChatHistory(state, matchId, liveMsgs));
       },
       sendMessage: (text) => {
         const id = get().activeChatId;

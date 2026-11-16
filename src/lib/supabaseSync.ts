@@ -51,8 +51,9 @@ export const verifyTripTicket = (trip: TripData, boardingPass: string) =>
 
 export const fetchUserTrips = () => call<TripData[]>('myTrips', [], []);
 
+// null = request failed: callers keep what they have instead of showing an empty list.
 export const fetchLiveCoTravelers = (trip: TripData, currentUserIndustry?: string) =>
-  call<MatchProfile[]>('coTravelers', [trip, currentUserIndustry], []);
+  call<MatchProfile[] | null>('coTravelers', [trip, currentUserIndustry], null);
 
 export const sendConnectionRequest = (receiverId: string, trip: TripData, fit = 85) =>
   call<'sent' | 'accepted' | 'declined' | null>('sendRequest', [receiverId, trip, fit], null);
@@ -60,22 +61,21 @@ export const sendConnectionRequest = (receiverId: string, trip: TripData, fit = 
 export const respondToConnectionRequest = (matchRowId: string, status: 'accepted' | 'declined') =>
   call<boolean>('respondRequest', [matchRowId, status], false);
 
-export const fetchUserRequestsAndMatches = () =>
+type ChatRow = { id: string; from: 'me' | 'them'; text: string; card?: boolean; timestamp?: string };
+
+// Requests, contacts and every accepted chat in one request. null = request failed.
+export const fetchInbox = () =>
   call<{
     incoming: IncomingRequestItem[];
     reqStatus: Record<string, 'sent' | 'accepted' | 'declined'>;
     contacts: MatchProfile[];
-  }>('requests', [], { incoming: [], reqStatus: {}, contacts: [] });
+    chats: Record<string, ChatRow[]>;
+  } | null>('inbox', [], null);
 
 export const sendChatMessageToSupabase = (chatKey: string, text: string, isCard: boolean, msgId: string) =>
   call<boolean>('sendMessage', [chatKey, text, isCard, msgId], false);
 
-export const fetchLiveChatMessages = (chatKey: string) =>
-  call<{ id: string; from: 'me' | 'them'; text: string; card?: boolean; timestamp?: string }[]>(
-    'messages',
-    [chatKey],
-    []
-  );
+export const fetchLiveChatMessages = (chatKey: string) => call<ChatRow[]>('messages', [chatKey], []);
 
 export const deleteUserAccount = () => call<boolean>('deleteAccount', [], false);
 

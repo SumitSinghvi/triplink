@@ -284,9 +284,8 @@ export async function fetchLiveCoTravelers(
       }
     }
 
-    if (tripErr || !matchingTrips || matchingTrips.length === 0) {
-      return [];
-    }
+    if (tripErr) throw tripErr;
+    if (!matchingTrips || matchingTrips.length === 0) return [];
 
     // One entry per person (corridor can return several rows per user); drop blocked either way;
     // respect each trip's visibility (shared mode + "show me 2h before").
@@ -309,9 +308,8 @@ export async function fetchLiveCoTravelers(
       .select('*')
       .in('id', userIds);
 
-    if (profErr || !profiles) {
-      return [];
-    }
+    if (profErr) throw profErr;
+    if (!profiles) return [];
 
     const profileMap = new Map(profiles.map((p) => [p.id, p]));
 
@@ -373,7 +371,7 @@ export async function fetchLiveCoTravelers(
     });
   } catch (err) {
     console.warn('Supabase match query exception:', err);
-    return [];
+    throw err; // route answers 500; the client keeps its cached list
   }
 }
 
@@ -473,21 +471,27 @@ export async function respondToConnectionRequest(
 }
 
 // 6. Fetch Incoming and Outgoing Request States
-export async function fetchUserRequestsAndMatches(userId: string): Promise<{
+// One poll for everything app-wide: requests, accepted contacts, and every accepted chat's history.
+// Throws on DB errors so the route answers 500 and the client keeps its cached state.
+// ponytail: returns full chat history each poll; upgrade = `since` cursor once chats get long.
+export async function fetchInbox(userId: string): Promise<{
   incoming: IncomingRequestItem[];
   reqStatus: Record<string, 'sent' | 'accepted' | 'declined'>;
   // Accepted connections as profiles, so chats render without the partner being in current trip matches.
   contacts: MatchProfile[];
+  // Chat key (`match_<uid>`) -> history; chats with no messages are absent.
+  chats: Record<string, ChatRow[]>;
 }> {
-  const empty = { incoming: [], reqStatus: {}, contacts: [] };
   try {
     const { data, error } = await db()
       .from('matches')
       .select('*')
       .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`);
 
-    if (error || !data) return empty;
+    if (error) throw error;
+    if (!data) return { incoming: [], reqStatus: {}, contacts: [], chats: {} };
 
+    const acceptedRows = new Map<string, string>(); // connection row id -> chat key
     const reqStatus: Record<string, 'sent' | 'accepted' | 'declined'> = {};
     const pendingIncomingRows: typeof data = [];
     const acceptedIds = new Set<string>();
@@ -502,6 +506,7 @@ export async function fetchUserRequestsAndMatches(userId: string): Promise<{
       if (row.status === 'accepted') {
         reqStatus[matchKey] = 'accepted';
         acceptedIds.add(otherId);
+        acceptedRows.set(row.id, matchKey);
       } else if (reqStatus[matchKey] === 'accepted') {
         continue;
       } else if (outgoing && (row.status === 'pending' || row.status === 'declined')) {
@@ -513,9 +518,20 @@ export async function fetchUserRequestsAndMatches(userId: string): Promise<{
 
     const liveIncoming = pendingIncomingRows.filter((r) => !acceptedIds.has(r.requester_id));
     const profileIds = [...new Set([...liveIncoming.map((r) => r.requester_id), ...acceptedIds])];
-    if (profileIds.length === 0) return { incoming: [], reqStatus, contacts: [] };
+    if (profileIds.length === 0) return { incoming: [], reqStatus, contacts: [], chats: {} };
 
-    const { data: profs } = await db().from('profiles').select('*').in('id', profileIds);
+    const [{ data: profs }, msgs] = await Promise.all([
+      db().from('profiles').select('*').in('id', profileIds),
+      acceptedRows.size
+        ? db().from('messages').select('*').in('match_id', [...acceptedRows.keys()]).order('created_at', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (msgs.error) throw msgs.error;
+    const chats: Record<string, ChatRow[]> = {};
+    for (const m of msgs.data || []) {
+      const key = acceptedRows.get(m.match_id);
+      if (key) (chats[key] ??= []).push(toChatRow(m, userId));
+    }
     const profMap = new Map((profs || []).map((p) => [p.id, p]));
 
     const incoming: IncomingRequestItem[] = liveIncoming.map((r) => {
@@ -552,10 +568,10 @@ export async function fetchUserRequestsAndMatches(userId: string): Promise<{
       };
     });
 
-    return { incoming, reqStatus, contacts };
+    return { incoming, reqStatus, contacts, chats };
   } catch (err) {
-    console.warn('fetchUserRequestsAndMatches exception:', err);
-    return empty;
+    console.warn('fetchInbox exception:', err);
+    throw err;
   }
 }
 
@@ -612,10 +628,22 @@ export async function sendChatMessageToSupabase(
   }
 }
 
-export async function fetchLiveChatMessages(
-  chatKey: string,
-  currentUserId: string
-): Promise<{ id: string; from: 'me' | 'them'; text: string; card?: boolean; timestamp?: string }[]> {
+type ChatRow = { id: string; from: 'me' | 'them'; text: string; card?: boolean; timestamp?: string };
+
+function toChatRow(
+  m: { id: string; sender_id: string; text: string; is_card?: boolean | null; created_at: string },
+  me: string
+): ChatRow {
+  return {
+    id: m.id,
+    from: m.sender_id === me ? 'me' : 'them',
+    text: m.text,
+    card: m.is_card || false,
+    timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
+export async function fetchLiveChatMessages(chatKey: string, currentUserId: string): Promise<ChatRow[]> {
   try {
     const matchIds = await resolveConnectionRowIds(chatKey, currentUserId);
     if (matchIds.length === 0) return [];
@@ -628,13 +656,7 @@ export async function fetchLiveChatMessages(
 
     if (error || !data) return [];
 
-    return data.map((m) => ({
-      id: m.id,
-      from: m.sender_id === currentUserId ? 'me' : 'them',
-      text: m.text,
-      card: m.is_card || false,
-      timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }));
+    return data.map((m) => toChatRow(m, currentUserId));
   } catch {
     return [];
   }

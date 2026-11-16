@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
+import { usePoll } from '@/lib/usePoll';
 
 const QUICK = ['Share catalogue', 'Meet at station?', "Let's connect after the trip"];
 
@@ -37,15 +38,10 @@ export const ActiveChatView: React.FC = () => {
   }, [msgs]);
 
   useEffect(() => {
-    if (!activeChatId) return;
-    syncChatMessages(activeChatId).catch(() => {});
-
-    // Poll every 5s instead of Realtime WebSocket (avoids page hang)
-    const interval = setInterval(() => {
-      syncChatMessages(activeChatId).catch(() => {});
-    }, 5000);
-    return () => clearInterval(interval);
+    if (activeChatId) syncChatMessages(activeChatId).catch(() => {});
   }, [activeChatId, syncChatMessages]);
+  // Poll every 5s instead of Realtime WebSocket (avoids page hang)
+  usePoll(() => activeChatId && syncChatMessages(activeChatId).catch(() => {}), 5000, activeChatId);
 
   if (!m) return null;
 
