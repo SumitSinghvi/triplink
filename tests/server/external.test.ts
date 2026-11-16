@@ -142,7 +142,7 @@ describe('pnr: verifyPNRWaterfall + route', () => {
     PassengerStatus: [{ Coach: 'B4', Berth: '12', BookingBerthCode: 'SL', CurrentStatus: 'CNF' }],
     ...over,
   });
-  const PNR = '1234567890'; // not a demo preset
+  const PNR = '1234567890';
 
   it('rejects invalid PNRs before any network call', async () => {
     const { pnr } = await load();
@@ -151,12 +151,11 @@ describe('pnr: verifyPNRWaterfall + route', () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it('demo presets resolve offline with today\'s date', async () => {
+  it('no demo shortcut: a formerly preset PNR goes to the live providers', async () => {
     const { pnr } = await load();
-    const f = vi.spyOn(globalThis, 'fetch');
-    const r = await pnr.verifyPNRWaterfall('28 49-102451');
-    expect(r).toMatchObject({ success: true, source: 'preset', result: { trainNumber: '12951', travelDate: todayIso(), maskedPnr: '28******51' } });
-    expect(f).not.toHaveBeenCalled();
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 500 }));
+    expect(await pnr.verifyPNRWaterfall('28 49-102451')).toMatchObject({ success: false, error: 'PNR not found' });
+    expect(f).toHaveBeenCalled();
   });
 
   it('ConfirmTkt: maps fields, then second call is served from cache; forceFresh bypasses', async () => {
@@ -222,6 +221,7 @@ describe('pnr: verifyPNRWaterfall + route', () => {
     const { pnrRoute } = await load();
     expect((await pnrRoute(post({}))).status).toBe(400);
     expect((await pnrRoute(post({ pnr: 123 }))).status).toBe(400);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(confirmTkt()));
     const ok = await pnrRoute(post({ pnr: '2849102451' }));
     const text = await ok.text();
     expect(ok.status).toBe(200);
@@ -233,6 +233,7 @@ describe('pnr: verifyPNRWaterfall + route', () => {
 
   it('known gap: no session needed', async () => {
     const { pnrRoute } = await load();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(confirmTkt()));
     expect((await pnrRoute(post({ pnr: '2849102451' }))).status).toBe(200);
   });
 });

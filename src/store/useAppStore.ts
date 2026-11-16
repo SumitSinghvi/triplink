@@ -28,6 +28,7 @@ import {
   blockUserInSupabase,
   reportUserInSupabase,
   fetchUserTrips,
+  deleteUserTrip,
   tripKey,
   newMessageId,
   endServerSession,
@@ -192,6 +193,7 @@ export interface AppState {
   confirmAddTrip: () => void;
   verifyTrip: (tripId: string, boardingPass: string) => Promise<boolean>;
   refreshFlightTrip: (tripId: string) => Promise<void>;
+  removeTrip: (tripId: string) => Promise<void>;
   selectTrip: (id: string) => void;
   refreshLiveMatches: (tripId?: string) => Promise<void>;
   syncUserRequests: () => Promise<void>;
@@ -401,6 +403,28 @@ export const useAppStore = create<AppState>()(
         get().showToast('Trip Added Successfully', 'View Matches', () => {
           set({ selTripId: newId, tab: 'matches' });
         });
+      },
+      // Optimistic: drop the trip and its co-travellers now, restore if the server delete fails.
+      removeTrip: async (tripId) => {
+        const prev = get();
+        const idx = prev.trips.findIndex((t) => t.id === tripId);
+        const trip = prev.trips[idx];
+        if (!trip) return;
+        const tripMatches = prev.matches.filter((m) => m.tripId === tripId);
+        set((s) => ({
+          trips: s.trips.filter((t) => t.id !== tripId),
+          matches: s.matches.filter((m) => m.tripId !== tripId),
+          selTripId: s.selTripId === tripId ? null : s.selTripId,
+        }));
+        if (await deleteUserTrip(trip)) {
+          get().showToast('Trip removed');
+          return;
+        }
+        set((s) => ({
+          trips: [...s.trips.slice(0, idx), trip, ...s.trips.slice(idx)],
+          matches: [...s.matches, ...tripMatches],
+        }));
+        get().showToast('Could not remove trip. Try again.');
       },
       selectTrip: (id) => {
         // MatchesTab fetches on mount / trip change, so no fetch here.

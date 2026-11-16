@@ -374,6 +374,12 @@ tr.is-highlight > :last-child { box-shadow: 12px 0 var(--fill-tertiary); }
       .x-trip__ic { flex: none; width: 40px; height: 40px; border-radius: var(--r-s); display: grid; place-items: center; background: var(--fill-primary-on); }
       .x-trip__when { font: var(--weight-medium) 22px/1.2 var(--sans); }
       .x-trip__foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .x-trip { position: relative; }
+      .x-trip .x-trip__top { padding-right: 40px; }
+      .x-trip__rm { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--text-secondary); cursor: pointer; transition: background var(--dur-quick), color var(--dur-quick); }
+      .x-trip__rm:hover, .x-trip__rm:focus-visible { background: var(--hover-wash); color: var(--fill-system-red); }
+      .x-trip__rm:focus-visible { outline: 2px solid var(--fill-system-red); outline-offset: 1px; }
+      @media (pointer: coarse) { .x-trip__rm { width: var(--tap); height: var(--tap); top: 6px; right: 6px; } }
       .x-count { font: var(--type-label); display: inline-flex; align-items: center; gap: 4px; }
       .x-av { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--fill-primary); color: var(--text-primary-on); font: var(--type-label); }
       .x-av--soc { background: var(--fill-primary-on); color: var(--text-primary); box-shadow: inset 0 0 0 1.5px var(--text-primary); }

@@ -55,20 +55,19 @@ describe('AddTripSheet: train by PNR', () => {
     expect(api.spy).not.toHaveBeenCalled();
   });
 
-  it('PNR input accepts digits only; demo chips fill it', async () => {
+  it('PNR input accepts digits only; no demo PNR chips', async () => {
     st().openAddTrip();
     mountSheet();
     await userEvent.type(screen.getByPlaceholderText('e.g. 8655220078'), '12ab-34');
     expect(st().add!.pnr).toBe('1234');
-    await userEvent.click(screen.getByText(/^2849102451/));
-    expect(st().add!.pnr).toBe('2849102451');
+    expect(screen.queryByText(/Demo PNR/)).toBeNull();
   });
 
   it('found: shows the trip, then Continue -> visibility -> Confirm adds it', async () => {
     const api = mockApi({ syncProfile: () => true, syncTrip: () => true, coTravelers: () => [] }, { '/api/pnr/verify': () => ({ success: true, data: pnrData }) });
     st().openAddTrip();
     mountSheet();
-    await userEvent.click(screen.getByText(/^2849102451/));
+    await userEvent.type(screen.getByPlaceholderText('e.g. 8655220078'), '2849102451');
     await userEvent.click(screen.getByText('Fetch trip'));
     await screen.findByText('Tejas Rajdhani Express (12951)');
     expect(screen.getByText('Trip found')).toBeTruthy();
@@ -352,6 +351,50 @@ describe('TripsTab', () => {
     );
     render(<TripsTab />);
     expect(screen.getAllByText('Verify with boarding pass')).toHaveLength(1);
+  });
+
+  describe('remove trip', () => {
+    const openConfirm = async () => {
+      setTrips(trip(), trip({ id: 't2', name: 'Tejas (12951)', kind: 'train' }));
+      useAppStore.setState({
+        selTripId: 't1',
+        matches: [{ id: 'match_a', tripId: 't1', type: 'Business', name: 'A', company: '', industry: '', ini: 'A' }],
+      });
+      render(<div className="x-app"><TripsTab /></div>);
+      await userEvent.click(screen.getByLabelText('Remove trip IndiGo 6E 214'));
+      expect(screen.getByText('Remove this trip?')).toBeTruthy();
+      expect(st().tab).not.toBe('matches'); // trash button does not open the trip
+    };
+
+    it('Keep trip closes the confirm without changes', async () => {
+      const api = mockApi();
+      await openConfirm();
+      await userEvent.click(screen.getByText('Keep trip'));
+      expect(screen.queryByText('Remove this trip?')).toBeNull();
+      expect(st().trips).toHaveLength(2);
+      expect(api.dbCalls).toEqual([]);
+    });
+
+    it('confirm removes trip + its matches, clears selection and deletes server-side', async () => {
+      const api = mockApi({ deleteTrip: () => true });
+      await openConfirm();
+      await userEvent.click(screen.getByRole('button', { name: /Remove trip$/ }));
+      expect(st().trips.map((t) => t.id)).toEqual(['t2']);
+      expect(st().matches).toEqual([]);
+      expect(st().selTripId).toBeNull();
+      await waitFor(() => expect(toast()).toBe('Trip removed'));
+      expect(api.actions()).toEqual(['deleteTrip']);
+      expect(screen.queryByText('IndiGo 6E 214')).toBeNull();
+    });
+
+    it('server failure restores the trip in place', async () => {
+      mockApi({ deleteTrip: () => false });
+      await openConfirm();
+      await userEvent.click(screen.getByRole('button', { name: /Remove trip$/ }));
+      await waitFor(() => expect(toast()).toBe('Could not remove trip. Try again.'));
+      expect(st().trips.map((t) => t.id)).toEqual(['t1', 't2']);
+      expect(st().matches).toHaveLength(1);
+    });
   });
 
   describe('verify with boarding pass', () => {

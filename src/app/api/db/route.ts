@@ -91,6 +91,7 @@ const ACTIONS: Record<string, (me: string, a: unknown[]) => Promise<unknown>> = 
   syncProfile: (me, a) => dbApi.syncUserProfile(me, profile(a[0]), modes(a[1])),
   syncTrip: (me, a) => dbApi.syncUserTrip(me, trip(a[0]), optStr(a[1], 1000)),
   verifyTrip: (me, a) => dbApi.verifyTripTicket(me, trip(a[0]), str(a[1], 1000)),
+  deleteTrip: (me, a) => dbApi.deleteUserTrip(me, trip(a[0])),
   myTrips: (me) => dbApi.fetchUserTrips(me),
   coTravelers: (me, a) => dbApi.fetchLiveCoTravelers(trip(a[0]), me, optStr(a[1], 60)),
   sendRequest: (me, a) => {

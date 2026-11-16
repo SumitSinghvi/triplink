@@ -91,6 +91,19 @@ describe('/api/db identity comes from the cookie only', () => {
     expect(s.fake.rows('trips')).toMatchObject([{ user_id: A }]);
   });
 
+  it('deleteTrip removes only the session user\'s row for that journey', async () => {
+    as(B);
+    await act('syncTrip', [trip()]);
+    as(A);
+    await act('syncTrip', [trip()]);
+    await act('syncTrip', [{ ...trip(), id: 'other', travelDate: '2099-12-31', when: '2099-12-31' }]);
+    expect((await act('deleteTrip', [trip()])).body.result).toBe(true);
+    expect(s.fake.rows('trips').map((r) => [r.user_id, r.travel_date])).toEqual([
+      [B, DATE],
+      [A, '2099-12-31'],
+    ]);
+  });
+
   it('sendRequest records the session user as requester; fit is clamped to 85 when out of range', async () => {
     as(A);
     expect((await act('sendRequest', [B, trip(), 500])).body.result).toBe('sent');

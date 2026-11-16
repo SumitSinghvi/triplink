@@ -62,7 +62,7 @@ Code: `lib/server/session.ts`, `api/auth/{session,logout}`, `page.tsx`, `supabas
 - Any `/api/db` 401 fires the unauthorized handler once → store `logout()` + "Session expired" toast; handler only registered while `screen==='main'`.
 
 ### W4. Add train trip by PNR — P0
-Code: `AddTripSheet` (train), `api/pnr/verify`, `pnrScraper/*`, `pnr.ts`, `mockData`.
+Code: `AddTripSheet` (train), `api/pnr/verify`, `pnrScraper/*`, `pnr.ts`.
 - `validatePNR`/`maskPNR`: 10 digits, first digit 1–9, spaces/dashes stripped; mask `28******51`.
 - Waterfall order: invalid → preset (3 demo PNRs, date = today IST) → cache → ConfirmTkt → EaseMyTrip → "PNR not found" with last reason.
 - Cache: only CONFIRMED + chart prepared stored; 15 min TTL; `forceFresh` bypasses.

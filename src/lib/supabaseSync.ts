@@ -49,6 +49,8 @@ export const syncUserTrip = (trip: TripData, boardingPass?: string) =>
 export const verifyTripTicket = (trip: TripData, boardingPass: string) =>
   call<boolean>('verifyTrip', [trip, boardingPass], false);
 
+export const deleteUserTrip = (trip: TripData) => call<boolean>('deleteTrip', [trip], false);
+
 export const fetchUserTrips = () => call<TripData[]>('myTrips', [], []);
 
 // null = request failed: callers keep what they have instead of showing an empty list.

@@ -3,7 +3,6 @@
 import React from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SvgIcon } from '@/shared/icons';
-import { DEMO_PRESET_PNRS } from '@/lib/mockData';
 import { julianToIso, parseBcbp } from '@/lib/bcbp';
 import { todayIso } from '@/lib/travelDate';
 import { readBoardingPassBarcode } from '@/lib/boardingPassScan';
@@ -278,22 +277,6 @@ export const AddTripSheet: React.FC = () => {
                     onChange={(e) => updateAddTrip({ pnr: e.target.value.replace(/\D/g, ''), found: null, err: '' })}
                   />
                 </label>
-                <div style={{ marginTop: '8px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-secondary,#6b7280)', fontWeight: 600 }}>Demo PNR chips:</span>
-                  <div className="x-chips" style={{ marginTop: '4px', gap: '6px' }}>
-                    {DEMO_PRESET_PNRS.map((p) => (
-                      <button
-                        key={p.pnr}
-                        type="button"
-                        className="x-chip"
-                        style={{ fontSize: '11px', padding: '4px 8px' }}
-                        onClick={() => updateAddTrip({ pnr: p.pnr, found: null, err: '' })}
-                      >
-                        {p.pnr} ({p.trainName.split(' ')[0]})
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </>
             ) : (
               <>

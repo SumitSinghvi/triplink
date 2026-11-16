@@ -10,9 +10,10 @@ import { isCancelled, isDelayed } from '@/lib/flightLookup';
 import { PassPicker } from './PassPicker';
 
 export const TripsTab: React.FC = () => {
-  const { trips, openAddTrip, selectTrip, matches, gone, verifyTrip, showToast, refreshFlightTrip } =
+  const { trips, openAddTrip, selectTrip, matches, gone, verifyTrip, showToast, refreshFlightTrip, removeTrip } =
     useAppStore();
   const [verifying, setVerifying] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<TripData | null>(null);
 
   // Re-check upcoming flights when the list is viewed (store skips >7 days out and throttles).
   const flightIds = trips.filter((t) => t.kind === 'flight').map((t) => t.id).join(',');
@@ -61,37 +62,47 @@ export const TripsTab: React.FC = () => {
 
   const renderTrip = (t: TripData) => (
     <React.Fragment key={t.id}>
-      <button
-        type="button"
-        className="x-card"
-        onClick={() => selectTrip(t.id)}
-      >
-        <span className="x-trip__top">
-          <span className="x-trip__ic">
-            <SvgIcon name={t.kind === 'flight' ? 'plane' : 'train'} size={20} />
+      <div className="x-trip">
+        <button
+          type="button"
+          className="x-card"
+          onClick={() => selectTrip(t.id)}
+        >
+          <span className="x-trip__top">
+            <span className="x-trip__ic">
+              <SvgIcon name={t.kind === 'flight' ? 'plane' : 'train'} size={20} />
+            </span>
+            <span>
+              <b>{t.name}</b>
+              <small>{t.route}</small>
+            </span>
           </span>
-          <span>
-            <b>{t.name}</b>
-            <small>{t.route}</small>
+          <span className="x-trip__when">{t.when}</span>
+          <span className="x-trip__foot">
+            <span className="x-m__tags">
+              <span className="pill">{visLabel(t.vis)}</span>
+              {t.vis.twoh && <span className="pill">2 h before only</span>}
+              {t.ticketVerified && <span className="pill">Ticket verified</span>}
+              {isCancelled(t.flightStatus) && (
+                <span className="pill" style={{ color: 'var(--fill-system-red)' }}>Flight cancelled</span>
+              )}
+              {isDelayed(t.flightStatus) && <span className="pill">{t.flightStatus}</span>}
+            </span>
+            <span className="x-count">
+              {getMatchCount(t.id)} matches{' '}
+              <SvgIcon name="chev" size={16} />
+            </span>
           </span>
-        </span>
-        <span className="x-trip__when">{t.when}</span>
-        <span className="x-trip__foot">
-          <span className="x-m__tags">
-            <span className="pill">{visLabel(t.vis)}</span>
-            {t.vis.twoh && <span className="pill">2 h before only</span>}
-            {t.ticketVerified && <span className="pill">Ticket verified</span>}
-            {isCancelled(t.flightStatus) && (
-              <span className="pill" style={{ color: 'var(--fill-system-red)' }}>Flight cancelled</span>
-            )}
-            {isDelayed(t.flightStatus) && <span className="pill">{t.flightStatus}</span>}
-          </span>
-          <span className="x-count">
-            {getMatchCount(t.id)} matches{' '}
-            <SvgIcon name="chev" size={16} />
-          </span>
-        </span>
-      </button>
+        </button>
+        <button
+          type="button"
+          className="x-trip__rm"
+          onClick={() => setRemoving(t)}
+          aria-label={`Remove trip ${t.name}`}
+        >
+          <SvgIcon name="trash" size={18} />
+        </button>
+      </div>
       {t.kind === 'flight' && !t.ticketVerified && !isPastTrip(t) && !isCancelled(t.flightStatus) && (
         <PassPicker
           small
@@ -153,6 +164,43 @@ export const TripsTab: React.FC = () => {
           <span>Only opted-in travellers on the same train or flight can see you, and both of you must accept before chatting.</span>
         </div>
       </div>
+
+      {removing && (
+        <>
+          <div className="x-scrim" onClick={() => setRemoving(null)} />
+          <div className="x-sheet" style={{ zIndex: 35 }} role="dialog" aria-label="Remove trip">
+            <div className="x-grab" />
+            <h3>Remove this trip?</h3>
+            <div className="x-card" style={{ background: 'var(--fill-tertiary)' }}>
+              <span className="x-trip__top">
+                <span className="x-trip__ic">
+                  <SvgIcon name={removing.kind === 'flight' ? 'plane' : 'train'} size={20} />
+                </span>
+                <span>
+                  <b>{removing.name}</b>
+                  <small>{removing.route} · {removing.when}</small>
+                </span>
+              </span>
+            </div>
+            <p className="x-sub">
+              You&apos;ll stop showing up for co-travellers on this journey. Existing chats stay in Chats.
+            </p>
+            <button
+              type="button"
+              className="x-btn x-btn--danger"
+              onClick={() => {
+                removeTrip(removing.id);
+                setRemoving(null);
+              }}
+            >
+              <SvgIcon name="trash" size={18} /> Remove trip
+            </button>
+            <button type="button" className="x-btn" onClick={() => setRemoving(null)}>
+              Keep trip
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 };

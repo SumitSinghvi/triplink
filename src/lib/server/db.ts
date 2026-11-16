@@ -168,6 +168,29 @@ export async function syncUserTrip(userId: string, trip: TripData, boardingPass?
   }
 }
 
+// Remove one of the user's trips. Rows are keyed like syncUserTrip's id; a trip without a
+// travel date was never synced, so there is nothing to delete server-side.
+export async function deleteUserTrip(userId: string, trip: TripData): Promise<boolean> {
+  const travelDate = tripTravelDate(trip);
+  if (!travelDate) return true;
+  try {
+    const { error } = await db()
+      .from('trips')
+      .delete()
+      .eq('user_id', userId)
+      .eq('train_number', extractJourneyKey(trip.name))
+      .eq('travel_date', travelDate);
+    if (error) {
+      console.warn('deleteUserTrip warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('deleteUserTrip exception:', err);
+    return false;
+  }
+}
+
 // Verify an already-added trip with a boarding pass. Re-syncs the trip (creating the row if an earlier
 // sync failed), which stores ticket_verified=true. True only when the pass actually verified.
 export async function verifyTripTicket(userId: string, trip: TripData, boardingPass: string): Promise<boolean> {
