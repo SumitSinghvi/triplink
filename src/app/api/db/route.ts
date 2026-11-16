@@ -128,7 +128,8 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-  const handler = typeof body.action === 'string' ? ACTIONS[body.action] : undefined;
+  const handler =
+    typeof body.action === 'string' && Object.hasOwn(ACTIONS, body.action) ? ACTIONS[body.action] : undefined;
   if (!handler) return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 
   try {
